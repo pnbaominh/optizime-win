@@ -1,0 +1,53 @@
+name: Release Build
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build Windows Binary & Release
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Build Standalone .EXE
+        run: |
+          python build_exe.py
+
+      - name: Create Release Archive & Checksums
+        shell: powershell
+        run: |
+          Compress-Archive -Path 'dist\WindowsDeepOptimizer.exe', 'README.md', 'LICENSE' -DestinationPath 'dist\WindowsDeepOptimizer-v1.0.0.zip' -Force
+          (Get-FileHash 'dist\WindowsDeepOptimizer.exe' -Algorithm SHA256).Hash | Set-Content 'dist\checksums.txt'
+
+      - name: Publish GitHub Release with Assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/WindowsDeepOptimizer.exe
+            dist/WindowsDeepOptimizer-v1.0.0.zip
+            dist/checksums.txt
+          tag_name: ${{ github.ref_name || 'v1.0.0' }}
+          name: "Windows Deep Optimizer ${{ github.ref_name || 'v1.0.0' }}"
+          draft: false
+          prerelease: false
+          generate_release_notes: true
