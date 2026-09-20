@@ -1,0 +1,4 @@
+customtkinter>=6.0.0
+pyinstaller>=6.22.0
+pywin32>=312
+darkdetect>=0.8.0
