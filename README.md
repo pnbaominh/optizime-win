@@ -28,39 +28,17 @@
 
 ---
 
-## 🚀 Hướng Dẫn Sử Dụng
+## 📥 Tải Về Ứng Dụng (Releases)
 
-### Chạy trực tiếp từ mã nguồn Python
-Yêu cầu: Python 3.10+ (Đã hỗ trợ hoàn hảo Python 3.14)
-```powershell
-# Cài đặt thư viện cần thiết
-pip install -r requirements.txt
+👉 **Tải phiên bản mới nhất tại: [GitHub Releases (v1.0.0)](https://github.com/pnbaominh/optizime-win/releases)**
 
-# Khởi chạy ứng dụng (Sẽ tự động kích hoạt quyền Administrator qua UAC)
-python main.py
-```
+| Tệp Tải Về (Asset) | Định Dạng | Mô Tả |
+| :--- | :--- | :--- |
+| ⚡ **[WindowsDeepOptimizer.exe](https://github.com/pnbaominh/optizime-win/releases/download/v1.0.0/WindowsDeepOptimizer.exe)** | Standalone .EXE | Tải về click đúp chạy ngay, không cần cài đặt. Đã nhúng sẵn UAC Administrator. |
+| 📦 **[WindowsDeepOptimizer-v1.0.0.zip](https://github.com/pnbaominh/optizime-win/releases/download/v1.0.0/WindowsDeepOptimizer-v1.0.0.zip)** | Portable ZIP | Gói nén chứa phần mềm độc lập và mã băm kiểm tra tính toàn vẹn (SHA256). |
 
-### Chạy Unit Test kiểm thử hệ thống
-```powershell
-python -m unittest tests/test_core.py
-```
-
----
-
-## 📦 Đóng Gói Thành File .EXE Độc Lập
-
-### Cách 1: Tạo file Standalone .EXE (Chạy ngay không cần cài đặt)
-Chạy script đóng gói tự động:
-```powershell
-python build_exe.py
-```
-Sau khi hoàn tất, file thực thi sẽ nằm tại:
-`dist\WindowsDeepOptimizer.exe`
-- Đã được nhúng sẵn **UAC Manifest (`requireAdministrator`)**, khi người dùng click đúp mở app, Windows sẽ tự động hiện hộp thoại xác nhận Admin chuẩn của hệ điều hành.
-
-### Cách 2: Tạo bộ cài đặt Setup Installer (Inno Setup)
-Mở file [`installer_setup.iss`](file:///C:/Users/Bim/Documents/optizime%20win/installer_setup.iss) bằng công cụ Inno Setup Compiler và bấm **Compile** (hoặc chạy lệnh `iscc installer_setup.iss`).
-File cài đặt hoàn chỉnh `WindowsDeepOptimizer_Setup_v1.0.exe` sẽ được tạo ra với shortcut Desktop và tính năng gỡ cài đặt sạch sẽ trong Control Panel.
+> [!TIP]
+> **Khởi chạy cực nhanh:** Ứng dụng đã được nhúng sẵn **UAC Manifest (`requireAdministrator`)**. Khi bạn click đúp mở app, Windows sẽ tự động hiển thị hộp thoại xác nhận quyền Quản trị viên để thực hiện các thao tác tối ưu an toàn.
 
 ---
 
