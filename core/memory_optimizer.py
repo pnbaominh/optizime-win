@@ -91,20 +91,21 @@ def enable_privilege(priv_name: str) -> bool:
         if not advapi32.OpenProcessToken(kernel32.GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, ctypes.byref(h_token)):
             return False
 
-        luid = LUID()
-        if not advapi32.LookupPrivilegeValueW(None, priv_name, ctypes.byref(luid)):
+        try:
+            luid = LUID()
+            if not advapi32.LookupPrivilegeValueW(None, priv_name, ctypes.byref(luid)):
+                return False
+
+            tp = TOKEN_PRIVILEGES()
+            tp.PrivilegeCount = 1
+            tp.Privileges[0].Luid = luid
+            tp.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED
+
+            ret = advapi32.AdjustTokenPrivileges(h_token, False, ctypes.byref(tp), ctypes.sizeof(tp), None, None)
+            err = kernel32.GetLastError()
+            return ret != 0 and err == 0
+        finally:
             kernel32.CloseHandle(h_token)
-            return False
-
-        tp = TOKEN_PRIVILEGES()
-        tp.PrivilegeCount = 1
-        tp.Privileges[0].Luid = luid
-        tp.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED
-
-        ret = advapi32.AdjustTokenPrivileges(h_token, False, ctypes.byref(tp), ctypes.sizeof(tp), None, None)
-        err = kernel32.GetLastError()
-        kernel32.CloseHandle(h_token)
-        return ret != 0 and err == 0
     except Exception:
         return False
 
@@ -157,6 +158,7 @@ def get_detailed_memory_info() -> Dict[str, Any]:
 def get_all_pids() -> List[int]:
     """Lấy danh sách Process ID (PID) đang chạy bằng CreateToolhelp32Snapshot."""
     pids = []
+    h_snapshot = None
     try:
         h_snapshot = ctypes.windll.kernel32.CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)
         if h_snapshot == -1 or h_snapshot == 0:
@@ -171,9 +173,14 @@ def get_all_pids() -> List[int]:
                     pids.append(pe.th32ProcessID)
                 if not ctypes.windll.kernel32.Process32Next(h_snapshot, ctypes.byref(pe)):
                     break
-        ctypes.windll.kernel32.CloseHandle(h_snapshot)
     except Exception:
         pids = [os.getpid()]
+    finally:
+        if h_snapshot and h_snapshot != -1 and h_snapshot != 0:
+            try:
+                ctypes.windll.kernel32.CloseHandle(h_snapshot)
+            except Exception:
+                pass
     return pids
 
 def trim_all_working_sets() -> Tuple[bool, str, int, int]:
@@ -196,10 +203,12 @@ def trim_all_working_sets() -> Tuple[bool, str, int, int]:
         try:
             h_proc = kernel32.OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_SET_QUOTA, False, pid)
             if h_proc:
-                psapi.EmptyWorkingSet(h_proc)
-                kernel32.SetProcessWorkingSetSize(h_proc, -1, -1)
-                kernel32.CloseHandle(h_proc)
-                trimmed_count += 1
+                try:
+                    psapi.EmptyWorkingSet(h_proc)
+                    kernel32.SetProcessWorkingSetSize(h_proc, -1, -1)
+                    trimmed_count += 1
+                finally:
+                    kernel32.CloseHandle(h_proc)
         except Exception:
             pass
 
