@@ -25,7 +25,17 @@ from core.updater import UpdateChecker
 from ui.update_dialog import UpdateDialog
 from core.startup_manager import list_startup_items, remove_startup_item
 from core.network_optimizer import flush_dns_cache, set_primary_dns, reset_dns_to_dhcp, DNS_PROVIDERS
-from core.memory_optimizer import trim_memory_working_sets
+from core.memory_optimizer import (
+    get_detailed_memory_info,
+    trim_all_working_sets,
+    purge_standby_list,
+    full_memory_purge,
+    get_boot_memory_status,
+    set_sysmain_boot,
+    set_memory_compression_boot,
+    set_large_system_cache_boot,
+    trim_memory_working_sets
+)
 from ui.theme import (
     COLOR_BG_DARK, COLOR_SIDEBAR_BG, COLOR_CARD_BG, COLOR_BORDER,
     COLOR_PRIMARY, COLOR_PRIMARY_HOVER, COLOR_SUCCESS, COLOR_SUCCESS_HOVER,
@@ -203,6 +213,7 @@ class MainWindow(ctk.CTk):
             ("privacy", "🔒  Quyền Riêng Tư"),
             ("services", "⚙️  Dịch Vụ Hệ Thống"),
             ("performance", "🚀  Hiệu Năng & Game"),
+            ("memory", "💾  Tối Ưu Hóa RAM"),
             ("startup", "⚡  Quản Lý Khởi Động"),
             ("network", "🌐  Mạng & DNS"),
             ("cleaner", "🧹  Dọn Rác & Bloatware"),
@@ -304,6 +315,7 @@ class MainWindow(ctk.CTk):
         self.views["privacy"] = self._create_category_view("Quyền Riêng Tư")
         self.views["services"] = self._create_category_view("Dịch Vụ Hệ Thống")
         self.views["performance"] = self._create_category_view("Hiệu Năng & Gaming")
+        self.views["memory"] = self._create_memory_view()
         self.views["startup"] = self._create_startup_view()
         self.views["network"] = self._create_network_view()
         self.views["cleaner"] = self._create_cleaner_view()
@@ -327,6 +339,8 @@ class MainWindow(ctk.CTk):
 
         if tab_id == "dashboard":
             self._update_dashboard_kpis()
+        elif tab_id == "memory":
+            self._refresh_memory_view()
 
     # -------------------------------------------------------------
     # VIEW: DASHBOARD
@@ -1029,6 +1043,371 @@ class MainWindow(ctk.CTk):
             self.log("--- GỠ BLOATWARE HOÀN TẤT ---")
             self.after(0, lambda: messagebox.showinfo("Hoàn Tất", "Đã gỡ các ứng dụng bloatware được chọn."))
             self.after(0, self._refresh_bloatware_ui)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    # -------------------------------------------------------------
+    # VIEW: MEMORY OPTIMIZATION
+    # -------------------------------------------------------------
+    def _create_memory_view(self) -> ctk.CTkScrollableFrame:
+        frame = ctk.CTkScrollableFrame(self.main_container, fg_color="transparent")
+
+        # Header Title
+        title_box = ctk.CTkFrame(frame, fg_color=COLOR_CARD_BG, border_color=COLOR_BORDER, border_width=1, corner_radius=8)
+        title_box.pack(fill="x", pady=(0, 14))
+
+        lbl_t = ctk.CTkLabel(
+            title_box,
+            text="💾 Tối Ưu Hóa Bộ Nhớ RAM Chuyên Sâu",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=16, weight="bold"),
+            text_color=COLOR_TEXT_WHITE
+        )
+        lbl_t.pack(anchor="w", padx=16, pady=(12, 2))
+
+        lbl_sub = ctk.CTkLabel(
+            title_box,
+            text="Giải phóng RAM đệm tức thời qua Windows NT Native API và tinh chỉnh cấu hình boot giúp giảm RAM sau khi khởi động lại.",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=11),
+            text_color=COLOR_TEXT_MUTED
+        )
+        lbl_sub.pack(anchor="w", padx=16, pady=(0, 12))
+
+        # Card 1: Giám Sát Bộ Nhớ Thời Gian Thực
+        mon_card = ctk.CTkFrame(frame, fg_color=COLOR_CARD_BG, border_color=COLOR_BORDER, border_width=1, corner_radius=8)
+        mon_card.pack(fill="x", pady=(0, 14))
+
+        mon_top = ctk.CTkFrame(mon_card, fg_color="transparent")
+        mon_top.pack(fill="x", padx=16, pady=(12, 6))
+
+        lbl_mon_t = ctk.CTkLabel(
+            mon_top,
+            text="📊 Giám Sát Dung Lượng RAM Hệ Thống",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=13, weight="bold"),
+            text_color=COLOR_TEXT_WHITE
+        )
+        lbl_mon_t.pack(side="left")
+
+        btn_refresh_mem = ctk.CTkButton(
+            mon_top,
+            text="🔄 Làm Mới Chỉ Số",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=11, weight="bold"),
+            fg_color="#1e293b",
+            hover_color="#334155",
+            width=130,
+            height=28,
+            corner_radius=6,
+            command=self._refresh_memory_view
+        )
+        btn_refresh_mem.pack(side="right")
+
+        # Progress bar & Percent
+        prog_row = ctk.CTkFrame(mon_card, fg_color="transparent")
+        prog_row.pack(fill="x", padx=16, pady=(4, 8))
+
+        self.lbl_ram_usage_summary = ctk.CTkLabel(
+            prog_row,
+            text="Đang phân tích bộ nhớ...",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=12, weight="bold"),
+            text_color=COLOR_TEXT_WHITE
+        )
+        self.lbl_ram_usage_summary.pack(anchor="w", pady=(0, 4))
+
+        self.ram_progress_bar = ctk.CTkProgressBar(prog_row, height=12, corner_radius=6, fg_color="#090d16", progress_color=COLOR_PRIMARY)
+        self.ram_progress_bar.pack(fill="x")
+        self.ram_progress_bar.set(0.0)
+
+        # 4 Stat Boxes
+        stats_frame = ctk.CTkFrame(mon_card, fg_color="transparent")
+        stats_frame.pack(fill="x", padx=16, pady=(8, 14))
+        stats_frame.grid_columnconfigure((0, 1, 2, 3), weight=1)
+
+        self.box_ram_total = StatBox(stats_frame, "TỔNG RAM VẬT LÝ", "0.0 GB", "Hệ thống", height=85)
+        self.box_ram_total.grid(row=0, column=0, sticky="ew", padx=(0, 4))
+
+        self.box_ram_used = StatBox(stats_frame, "ĐANG SỬ DỤNG", "0.0 GB", "0%", badge_color=COLOR_WARNING, height=85)
+        self.box_ram_used.grid(row=0, column=1, sticky="ew", padx=4)
+
+        self.box_ram_avail = StatBox(stats_frame, "RAM KHẢ DỤNG", "0.0 GB", "Sẵn sàng", badge_color=COLOR_SUCCESS, height=85)
+        self.box_ram_avail.grid(row=0, column=2, sticky="ew", padx=4)
+
+        self.box_ram_cached = StatBox(stats_frame, "STANDBY / CACHE", "0.0 GB", "Bộ nhớ đệm", badge_color="#38bdf8", height=85)
+        self.box_ram_cached.grid(row=0, column=3, sticky="ew", padx=(4, 0))
+
+        # Card 2: Giải Phóng RAM Tức Thời (Runtime Purge)
+        rt_card = ctk.CTkFrame(frame, fg_color=COLOR_CARD_BG, border_color=COLOR_BORDER, border_width=1, corner_radius=8)
+        rt_card.pack(fill="x", pady=(0, 14))
+
+        lbl_rt_t = ctk.CTkLabel(
+            rt_card,
+            text="⚡ Giải Phóng RAM Tức Thời (Không Cần Đóng Ứng Dụng)",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=13, weight="bold"),
+            text_color=COLOR_TEXT_WHITE
+        )
+        lbl_rt_t.pack(anchor="w", padx=16, pady=(12, 4))
+
+        lbl_rt_sub = ctk.CTkLabel(
+            rt_card,
+            text="Thu hồi các trang bộ nhớ đệm dư thừa mà Windows và các phần mềm không sử dụng, trả ngay lập tức vào vùng RAM trống.",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=11),
+            text_color=COLOR_TEXT_MUTED
+        )
+        lbl_rt_sub.pack(anchor="w", padx=16, pady=(0, 10))
+
+        # Row 1: Quick Trim
+        r1 = ctk.CTkFrame(rt_card, fg_color="#090d16", corner_radius=6)
+        r1.pack(fill="x", padx=16, pady=4)
+        r1_text = ctk.CTkFrame(r1, fg_color="transparent")
+        r1_text.pack(side="left", padx=12, pady=10)
+        ctk.CTkLabel(r1_text, text="⚡ Thu Gọn Working Sets Các Ứng Dụng (Quick Trim)", font=ctk.CTkFont(family=FONT_FAMILY, size=12, weight="bold"), text_color=COLOR_TEXT_WHITE).pack(anchor="w")
+        ctk.CTkLabel(r1_text, text="Thu hồi bộ nhớ RAM đệm của trình duyệt, Word, Excel và các tiến trình nền mà không làm tắt app.", font=ctk.CTkFont(family=FONT_FAMILY, size=10), text_color=COLOR_TEXT_MUTED).pack(anchor="w")
+
+        self.btn_trim_ws = ctk.CTkButton(r1, text="Thu Gọn RAM", font=ctk.CTkFont(family=FONT_FAMILY, size=11, weight="bold"), fg_color="#0891b2", hover_color="#0e7490", width=140, height=30, command=self._handle_quick_trim_ram)
+        self.btn_trim_ws.pack(side="right", padx=12)
+
+        # Row 2: Purge Standby List
+        r2 = ctk.CTkFrame(rt_card, fg_color="#090d16", corner_radius=6)
+        r2.pack(fill="x", padx=16, pady=4)
+        r2_text = ctk.CTkFrame(r2, fg_color="transparent")
+        r2_text.pack(side="left", padx=12, pady=10)
+        ctk.CTkLabel(r2_text, text="🧹 Xóa Sạch Standby Cache (NT Native Purge)", font=ctk.CTkFont(family=FONT_FAMILY, size=12, weight="bold"), text_color=COLOR_TEXT_WHITE).pack(anchor="w")
+        ctk.CTkLabel(r2_text, text="Gọi NtSetSystemInformation xóa sạch Standby List bị kẹt, chống khựng giật/drop FPS khi chơi game.", font=ctk.CTkFont(family=FONT_FAMILY, size=10), text_color=COLOR_TEXT_MUTED).pack(anchor="w")
+
+        self.btn_purge_standby = ctk.CTkButton(r2, text="Xóa Standby Cache", font=ctk.CTkFont(family=FONT_FAMILY, size=11, weight="bold"), fg_color="#0284c7", hover_color="#0369a1", width=140, height=30, command=self._handle_purge_standby_ram)
+        self.btn_purge_standby.pack(side="right", padx=12)
+
+        # Row 3: Full Purge
+        r3 = ctk.CTkFrame(rt_card, fg_color="#090d16", corner_radius=6)
+        r3.pack(fill="x", padx=16, pady=4)
+        r3_text = ctk.CTkFrame(r3, fg_color="transparent")
+        r3_text.pack(side="left", padx=12, pady=10)
+        ctk.CTkLabel(r3_text, text="🚀 Siêu Tối Ưu RAM Toàn Diện (Full Memory Purge)", font=ctk.CTkFont(family=FONT_FAMILY, size=12, weight="bold"), text_color=COLOR_TEXT_WHITE).pack(anchor="w")
+        ctk.CTkLabel(r3_text, text="Kết hợp đồng thời cả Thu gọn Working Sets và Xóa Standby List, tối đa hóa lượng RAM còn trống.", font=ctk.CTkFont(family=FONT_FAMILY, size=10), text_color=COLOR_TEXT_MUTED).pack(anchor="w")
+
+        self.btn_full_purge = ctk.CTkButton(r3, text="Siêu Dọn Dẹp Ngay", font=ctk.CTkFont(family=FONT_FAMILY, size=11, weight="bold"), fg_color=COLOR_PRIMARY, hover_color=COLOR_PRIMARY_HOVER, width=140, height=30, command=self._handle_full_purge_ram)
+        self.btn_full_purge.pack(side="right", padx=12)
+
+        # Status row
+        self.lbl_ram_action_status = ctk.CTkLabel(
+            rt_card,
+            text="💡 Mẹo: Nhấn 'Siêu Dọn Dẹp Ngay' trước khi chơi game nặng hoặc render video để có lượng RAM trống tối đa.",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=11),
+            text_color="#38bdf8"
+        )
+        self.lbl_ram_action_status.pack(anchor="w", padx=16, pady=(8, 12))
+
+        # Card 3: Cấu Hình Giảm RAM Vĩnh Viễn Khi Khởi Động Lại
+        boot_card = ctk.CTkFrame(frame, fg_color=COLOR_CARD_BG, border_color=COLOR_BORDER, border_width=1, corner_radius=8)
+        boot_card.pack(fill="x", pady=(0, 14))
+
+        lbl_bt_t = ctk.CTkLabel(
+            boot_card,
+            text="🛠️ Cấu Hình Giảm Chiếm Dụng RAM Khi Khởi Động Lại (Persistent Boot Tuning)",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=13, weight="bold"),
+            text_color=COLOR_TEXT_WHITE
+        )
+        lbl_bt_t.pack(anchor="w", padx=16, pady=(12, 4))
+
+        lbl_bt_sub = ctk.CTkLabel(
+            boot_card,
+            text="Các tinh chỉnh vĩnh viễn trong Registry và hệ thống. Đảm bảo sau khi Restart máy, lượng RAM bị Windows ngốn lúc mở máy sẽ giảm rõ rệt (từ 1.0 GB đến 2.5 GB).",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=11),
+            text_color=COLOR_TEXT_MUTED
+        )
+        lbl_bt_sub.pack(anchor="w", padx=16, pady=(0, 10))
+
+        # Switch 1: SysMain
+        self.sw_sysmain = ctk.CTkSwitch(
+            boot_card,
+            text="Tắt Dịch Vụ Nạp Trước Bộ Nhớ SysMain (SuperFetch)\n(Ngăn Windows tự động nhồi 1.0 - 2.0 GB tệp vào RAM khi vừa mở máy)",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=11, weight="bold"),
+            text_color=COLOR_TEXT_WHITE,
+            progress_color=COLOR_PRIMARY
+        )
+        self.sw_sysmain.pack(anchor="w", padx=16, pady=6)
+
+        # Switch 2: Memory Compression
+        self.sw_mem_comp = ctk.CTkSwitch(
+            boot_card,
+            text="Tắt Cơ Chế Nén Bộ Nhớ (Memory Compression) Của Tiến Trình System\n(Giảm 300 - 800 MB RAM của tiến trình 'System' sau khi reboot, khuyên dùng cho máy >= 8 GB RAM)",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=11, weight="bold"),
+            text_color=COLOR_TEXT_WHITE,
+            progress_color=COLOR_PRIMARY
+        )
+        self.sw_mem_comp.pack(anchor="w", padx=16, pady=6)
+
+        # Switch 3: LargeSystemCache
+        self.sw_large_cache = ctk.CTkSwitch(
+            boot_card,
+            text="Ưu Tiên Toàn Bộ RAM Vật Lý Cho Ứng Dụng (LargeSystemCache = 0)\n(Ngăn hệ điều hành mở rộng bộ nhớ đệm tập tin hệ thống quá mức)",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=11, weight="bold"),
+            text_color=COLOR_TEXT_WHITE,
+            progress_color=COLOR_PRIMARY
+        )
+        self.sw_large_cache.pack(anchor="w", padx=16, pady=6)
+
+        # Boot Action Bar
+        boot_action_row = ctk.CTkFrame(boot_card, fg_color="transparent")
+        boot_action_row.pack(fill="x", padx=16, pady=(12, 14))
+
+        self.btn_apply_boot_mem = ctk.CTkButton(
+            boot_action_row,
+            text="💾 Áp Dụng Cấu Hình RAM Khởi Động",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=12, weight="bold"),
+            fg_color=COLOR_SUCCESS,
+            hover_color=COLOR_SUCCESS_HOVER,
+            height=34,
+            corner_radius=6,
+            command=self._handle_save_boot_memory_settings
+        )
+        self.btn_apply_boot_mem.pack(side="left")
+
+        self.lbl_boot_mem_result = ctk.CTkLabel(
+            boot_action_row,
+            text="",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=11),
+            text_color=COLOR_TEXT_MUTED
+        )
+        self.lbl_boot_mem_result.pack(side="left", padx=12)
+
+        self._refresh_memory_view()
+        return frame
+
+    def _refresh_memory_view(self):
+        """Cập nhật các số liệu RAM thời gian thực và trạng thái Boot."""
+        def worker():
+            info = get_detailed_memory_info()
+            boot_st = get_boot_memory_status()
+
+            def update_ui():
+                if not self.winfo_exists():
+                    return
+                # Update progress & labels
+                pct = info["percent_used"]
+                total_gb = info["total_mb"] / 1024
+                used_gb = info["used_mb"] / 1024
+                avail_gb = info["avail_mb"] / 1024
+                cached_gb = info["cached_mb"] / 1024
+
+                self.ram_progress_bar.set(pct / 100.0)
+                if pct < 65:
+                    self.ram_progress_bar.configure(progress_color=COLOR_SUCCESS)
+                elif pct < 80:
+                    self.ram_progress_bar.configure(progress_color=COLOR_WARNING)
+                else:
+                    self.ram_progress_bar.configure(progress_color=COLOR_DANGER)
+
+                self.lbl_ram_usage_summary.configure(
+                    text=f"Đang sử dụng: {used_gb:.1f} GB / {total_gb:.1f} GB ({pct}%) • {info['process_count']} tiến trình đang chạy"
+                )
+
+                self.box_ram_total.update_value(f"{total_gb:.1f} GB", "Hệ thống")
+                self.box_ram_used.update_value(f"{used_gb:.1f} GB", f"{pct}% tải")
+                self.box_ram_avail.update_value(f"{avail_gb:.1f} GB", "Sẵn sàng")
+                self.box_ram_cached.update_value(f"{cached_gb:.1f} GB", "Standby Cache")
+
+                # Update boot switches
+                if boot_st["sysmain_disabled"]:
+                    self.sw_sysmain.select()
+                else:
+                    self.sw_sysmain.deselect()
+
+                if boot_st["memory_compression_disabled"]:
+                    self.sw_mem_comp.select()
+                else:
+                    self.sw_mem_comp.deselect()
+
+                if boot_st["large_system_cache_app_mode"]:
+                    self.sw_large_cache.select()
+                else:
+                    self.sw_large_cache.deselect()
+
+            self.after(0, update_ui)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _handle_quick_trim_ram(self):
+        self.btn_trim_ws.configure(state="disabled", text="⏳ Đang thu gọn...")
+        def worker():
+            self.log("Bắt đầu thu gọn Working Sets các ứng dụng...")
+            ok, msg, count, freed = trim_all_working_sets()
+            self.log(f"[+] {msg}")
+            self.after(0, lambda: self.btn_trim_ws.configure(state="normal", text="Thu Gọn RAM"))
+            self.after(0, lambda: self.lbl_ram_action_status.configure(text=f"✅ {msg}", text_color="#34d399"))
+            self.after(0, self._refresh_memory_view)
+            self.after(0, lambda: messagebox.showinfo("Thu Gọn RAM", msg))
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _handle_purge_standby_ram(self):
+        self.btn_purge_standby.configure(state="disabled", text="⏳ Đang dọn...")
+        def worker():
+            self.log("Bắt đầu dọn sạch Standby List qua Windows NT Native API...")
+            ok, msg, freed = purge_standby_list()
+            status = "[+]" if ok else "[!]"
+            self.log(f"{status} {msg}")
+            self.after(0, lambda: self.btn_purge_standby.configure(state="normal", text="Xóa Standby Cache"))
+            self.after(0, lambda: self.lbl_ram_action_status.configure(
+                text=f"✅ {msg}" if ok else f"⚠️ {msg}",
+                text_color="#34d399" if ok else "#fbbf24"
+            ))
+            self.after(0, self._refresh_memory_view)
+            self.after(0, lambda: messagebox.showinfo("Standby Cache", msg))
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _handle_full_purge_ram(self):
+        self.btn_full_purge.configure(state="disabled", text="⏳ Đang siêu tối ưu...")
+        def worker():
+            self.log("Bắt đầu Siêu Tối Ưu RAM Toàn Diện (Working Sets + Standby List)...")
+            ok, msg, total_freed = full_memory_purge()
+            self.log(f"[+] {msg}")
+            self.after(0, lambda: self.btn_full_purge.configure(state="normal", text="Siêu Dọn Dẹp Ngay"))
+            self.after(0, lambda: self.lbl_ram_action_status.configure(text=f"🚀 {msg}", text_color="#38bdf8"))
+            self.after(0, self._refresh_memory_view)
+            self.after(0, lambda: messagebox.showinfo("Siêu Tối Ưu RAM", msg))
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _handle_save_boot_memory_settings(self):
+        self.btn_apply_boot_mem.configure(state="disabled", text="⏳ Đang áp dụng...")
+        self.lbl_boot_mem_result.configure(text="Đang ghi cấu hình hệ thống...")
+
+        disable_sysmain = bool(self.sw_sysmain.get())
+        disable_mem_comp = bool(self.sw_mem_comp.get())
+        prioritize_apps = bool(self.sw_large_cache.get())
+
+        def worker():
+            logs = []
+            self.log("--- BẮT ĐẦU ÁP DỤNG CẤU HÌNH RAM KHỞI ĐỘNG (BOOT PERSISTENT) ---")
+
+            # 1. SysMain
+            ok1, msg1 = set_sysmain_boot(disable_sysmain)
+            self.log(f"[{'+' if ok1 else '!'}] SysMain: {msg1}")
+            logs.append(msg1)
+
+            # 2. Memory Compression
+            ok2, msg2 = set_memory_compression_boot(disable_mem_comp)
+            self.log(f"[{'+' if ok2 else '!'}] Memory Compression: {msg2}")
+            logs.append(msg2)
+
+            # 3. LargeSystemCache
+            ok3, msg3 = set_large_system_cache_boot(prioritize_apps)
+            self.log(f"[{'+' if ok3 else '!'}] LargeSystemCache: {msg3}")
+            logs.append(msg3)
+
+            self.log("--- HOÀN TẤT CẤU HÌNH RAM BOOT ---")
+
+            def on_done():
+                self.btn_apply_boot_mem.configure(state="normal", text="💾 Áp Dụng Cấu Hình RAM Khởi Động")
+                self.lbl_boot_mem_result.configure(text="✅ Đã lưu cấu hình thành công!", text_color="#34d399")
+                msg_body = (
+                    "Đã lưu các cấu hình tối ưu hóa RAM khi khởi động thành công!\n\n"
+                    "Dự kiến sau khi bạn Khởi động lại máy (Restart):\n"
+                    "• Windows sẽ không tự nạp trước hàng gigabyte tệp vào RAM.\n"
+                    "• Tiến trình System sẽ giảm đáng kể dung lượng chiếm dụng.\n\n"
+                    "Bạn có thể khởi động lại máy tính khi thuận tiện để trải nghiệm lượng RAM được giải phóng."
+                )
+                messagebox.showinfo("Cấu Hình Boot Đã Lưu", msg_body)
+                self._refresh_memory_view()
+
+            self.after(0, on_done)
 
         threading.Thread(target=worker, daemon=True).start()
 
