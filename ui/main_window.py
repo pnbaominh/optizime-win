@@ -568,7 +568,11 @@ class MainWindow(ctk.CTk):
 
         def fetch():
             rps = list_system_restore_points()
-            self.after(0, lambda: self._render_restore_points(rps))
+            try:
+                if self.winfo_exists():
+                    self.after(0, lambda: self._render_restore_points(rps))
+            except Exception:
+                pass
 
         threading.Thread(target=fetch, daemon=True).start()
 
@@ -606,6 +610,16 @@ class MainWindow(ctk.CTk):
                 text_color=COLOR_TEXT_MUTED
             )
             time_lbl.pack(anchor="w", padx=12, pady=(0, 8))
+
+    def _open_backup_folder(self):
+        """Mở thư mục chứa các bản sao lưu Registry trong File Explorer."""
+        try:
+            b_dir = get_backup_dir()
+            if not os.path.exists(b_dir):
+                os.makedirs(b_dir, exist_ok=True)
+            os.startfile(b_dir)
+        except Exception as e:
+            messagebox.showerror("Lỗi", f"Không thể mở thư mục sao lưu: {e}")
 
     def _restart_as_admin(self):
         from core.sys_info import elevate_if_not_admin
@@ -1051,7 +1065,10 @@ class MainWindow(ctk.CTk):
         if hasattr(self, 'log_box'):
             self.log_box.insert("end", formatted)
             self.log_box.see("end")
-        print(formatted, end="")
+        try:
+            print(formatted, end="", flush=True)
+        except Exception:
+            pass
 
     def _clear_logs(self):
         if hasattr(self, 'log_box'):
