@@ -137,14 +137,20 @@ def download_and_install_update(
 
             # Chạy file cài đặt với tham số đóng ứng dụng cũ và khởi động lại
             # Nếu là Inno Setup: /SILENT hoặc /VERYSILENT /CLOSEAPPLICATIONS /RESTARTAPPLICATIONS
-            import subprocess
+            import ctypes
             if os.path.exists(target_installer):
-                subprocess.Popen(
-                    [target_installer, "/CLOSEAPPLICATIONS", "/RESTARTAPPLICATIONS"],
-                    shell=True
+                # Khởi động trình cài đặt với quyền Administrator
+                ret = ctypes.windll.shell32.ShellExecuteW(
+                    None,
+                    "runas",
+                    target_installer,
+                    "/CLOSEAPPLICATIONS /RESTARTAPPLICATIONS",
+                    None,
+                    1
                 )
-                # Thoát ứng dụng hiện tại để trình cài đặt ghi đè file
-                os._exit(0)
+                # Nếu khởi động thành công (ret > 32), thoát tiến trình app cũ để bộ cài đặt ghi đè
+                if ret > 32:
+                    os._exit(0)
 
         except Exception as e:
             if error_callback:

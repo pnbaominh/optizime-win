@@ -14,8 +14,8 @@ class UpdateDialog(ctk.CTkToplevel):
         self.update_info = update_info
 
         self.title("Bản Cập Nhật Mới - Windows Deep Optimizer")
-        self.geometry("540x440")
-        self.resizable(False, False)
+        self.geometry("560x520")
+        self.minsize(500, 480)
         self.configure(fg_color=COLOR_BG_DARK)
 
         # Căn giữa màn hình và giữ trên cùng
@@ -25,9 +25,9 @@ class UpdateDialog(ctk.CTkToplevel):
         self._init_ui()
 
     def _init_ui(self):
-        # Header Box
+        # 1. Header Box (Top)
         header_frame = ctk.CTkFrame(self, fg_color=COLOR_CARD_BG, border_color=COLOR_BORDER, border_width=1, corner_radius=8)
-        header_frame.pack(fill="x", padx=16, pady=(16, 12))
+        header_frame.pack(side="top", fill="x", padx=16, pady=(16, 10))
 
         title_lbl = ctk.CTkLabel(
             header_frame,
@@ -45,9 +45,53 @@ class UpdateDialog(ctk.CTkToplevel):
         )
         cur_lbl.pack(anchor="w", padx=14, pady=(0, 12))
 
-        # Changelog / Release Notes Box
+        # 2. Action Buttons (Bottom - Pin first to guarantee visibility)
+        btn_frame = ctk.CTkFrame(self, fg_color="transparent")
+        btn_frame.pack(side="bottom", fill="x", padx=16, pady=(10, 16))
+
+        self.btn_cancel = ctk.CTkButton(
+            btn_frame,
+            text="Để sau",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=12),
+            fg_color="#334155",
+            hover_color="#475569",
+            width=100,
+            height=38,
+            command=self.destroy
+        )
+        self.btn_cancel.pack(side="right", padx=(10, 0))
+
+        self.btn_update = ctk.CTkButton(
+            btn_frame,
+            text="⚡ Cập Nhật Tự Động Ngay",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=13, weight="bold"),
+            fg_color=COLOR_PRIMARY,
+            hover_color=COLOR_PRIMARY_HOVER,
+            width=230,
+            height=38,
+            command=self._start_update
+        )
+        self.btn_update.pack(side="right")
+
+        # 3. Progress Area (Bottom - Just above buttons)
+        self.progress_frame = ctk.CTkFrame(self, fg_color="transparent")
+        self.progress_frame.pack(side="bottom", fill="x", padx=16, pady=(0, 10))
+
+        self.status_lbl = ctk.CTkLabel(
+            self.progress_frame,
+            text="👉 Nhấn 'Cập Nhật Tự Động Ngay' bên dưới để bắt đầu tải và nâng cấp.",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=11),
+            text_color="#38bdf8"
+        )
+        self.status_lbl.pack(anchor="w", pady=(0, 6))
+
+        self.progress_bar = ctk.CTkProgressBar(self.progress_frame, fg_color="#1e293b", progress_color=COLOR_PRIMARY, height=12)
+        self.progress_bar.pack(fill="x")
+        self.progress_bar.set(0)
+
+        # 4. Changelog Box (Middle - Fills remaining space)
         cl_frame = ctk.CTkFrame(self, fg_color=COLOR_CARD_BG, border_color=COLOR_BORDER, border_width=1, corner_radius=8)
-        cl_frame.pack(fill="both", expand=True, padx=16, pady=(0, 12))
+        cl_frame.pack(side="top", fill="both", expand=True, padx=16, pady=(0, 10))
 
         cl_title = ctk.CTkLabel(
             cl_frame,
@@ -69,50 +113,6 @@ class UpdateDialog(ctk.CTkToplevel):
         self.cl_text.pack(fill="both", expand=True, padx=12, pady=(0, 10))
         self.cl_text.insert("1.0", self.update_info.get("changelog", "Không có thông tin chi tiết."))
         self.cl_text.configure(state="disabled")
-
-        # Progress Area
-        self.progress_frame = ctk.CTkFrame(self, fg_color="transparent")
-        self.progress_frame.pack(fill="x", padx=16, pady=(0, 8))
-
-        self.status_lbl = ctk.CTkLabel(
-            self.progress_frame,
-            text="Sẵn sàng cập nhật tự động bằng 1 cú nhấp chuột.",
-            font=ctk.CTkFont(family=FONT_FAMILY, size=11),
-            text_color=COLOR_TEXT_MUTED
-        )
-        self.status_lbl.pack(anchor="w", pady=(0, 4))
-
-        self.progress_bar = ctk.CTkProgressBar(self.progress_frame, fg_color="#1e293b", progress_color=COLOR_PRIMARY)
-        self.progress_bar.pack(fill="x")
-        self.progress_bar.set(0)
-
-        # Action Buttons
-        btn_frame = ctk.CTkFrame(self, fg_color="transparent")
-        btn_frame.pack(fill="x", padx=16, pady=(8, 16))
-
-        self.btn_cancel = ctk.CTkButton(
-            btn_frame,
-            text="Để sau",
-            font=ctk.CTkFont(family=FONT_FAMILY, size=11),
-            fg_color="#334155",
-            hover_color="#475569",
-            width=100,
-            height=34,
-            command=self.destroy
-        )
-        self.btn_cancel.pack(side="right", padx=(8, 0))
-
-        self.btn_update = ctk.CTkButton(
-            btn_frame,
-            text="⚡ Cập Nhật Tự Động Ngay",
-            font=ctk.CTkFont(family=FONT_FAMILY, size=12, weight="bold"),
-            fg_color=COLOR_PRIMARY,
-            hover_color=COLOR_PRIMARY_HOVER,
-            width=200,
-            height=34,
-            command=self._start_update
-        )
-        self.btn_update.pack(side="right")
 
     def _start_update(self):
         download_url = self.update_info.get("download_url")
