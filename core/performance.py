@@ -1,9 +1,9 @@
 import winreg
-import subprocess
 from typing import Tuple
 from core.tweak_base import Tweak
 from core.safety import backup_registry_key
 from core.privacy import set_reg_dword, get_reg_dword, delete_reg_value
+from core.process_utils import run_cmd
 
 class MenuShowDelayTweak(Tweak):
     """Giảm thời gian trễ hiển thị Menu từ 400ms xuống 20ms."""
@@ -146,7 +146,7 @@ class OptimizeTcpAutoTuningTweak(Tweak):
     def check(self) -> bool:
         try:
             cmd = ["netsh", "int", "tcp", "show", "global"]
-            res = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+            res = run_cmd(cmd, timeout=5)
             if res.returncode == 0:
                 for line in res.stdout.splitlines():
                     if "Auto-Tuning Level" in line or "Tự động Điều chỉnh" in line:
@@ -158,7 +158,7 @@ class OptimizeTcpAutoTuningTweak(Tweak):
     def apply(self) -> Tuple[bool, str]:
         try:
             cmd = ["netsh", "int", "tcp", "set", "global", "autotuninglevel=normal"]
-            res = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+            res = run_cmd(cmd, timeout=10)
             if res.returncode == 0:
                 return True, "Đã thiết lập TCP Auto-Tuning Level = Normal."
             return False, res.stderr.strip() or res.stdout.strip()
@@ -168,10 +168,64 @@ class OptimizeTcpAutoTuningTweak(Tweak):
     def revert(self) -> Tuple[bool, str]:
         try:
             cmd = ["netsh", "int", "tcp", "set", "global", "autotuninglevel=normal"]
-            res = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+            res = run_cmd(cmd, timeout=10)
             return True, "TCP Auto-Tuning được duy trì ở mức chuẩn Normal."
         except Exception as e:
             return False, str(e)
+
+
+class Win11ClassicContextMenuTweak(Tweak):
+    """Khôi phục Menu chuột phải cổ điển trên Windows 11 (Bỏ 'Show more options')."""
+    def __init__(self):
+        super().__init__(
+            tweak_id="perf_win11_classic_context",
+            name="Menu chuột phải cổ điển Windows 11",
+            category="Hiệu Năng & Gaming",
+            description="Mở menu chuột phải đầy đủ ngay lập tức, loại bỏ nút 'Show more options' phiền toái trên Windows 11.",
+            explanation=(
+                "Trên Windows 11, menu chuột phải mặc định bị thu gọn khiến bạn phải nhấn thêm 'Show more options'.\n"
+                "Tinh chỉnh này kích hoạt CLSID cổ điển trong Registry, giúp hiển thị toàn bộ tùy chọn ngay cú nhấp đầu tiên.\n"
+                "Khởi động lại Windows Explorer để thay đổi có hiệu lực ngay tức thì."
+            ),
+            is_recommended=True
+        )
+        self.clsid_key = r"Software\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\InprocServer32"
+
+    def check(self) -> bool:
+        try:
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, self.clsid_key, 0, winreg.KEY_READ) as key:
+                val, _ = winreg.QueryValueEx(key, "")
+                return val == ""
+        except Exception:
+            return False
+
+    def apply(self) -> Tuple[bool, str]:
+        try:
+            with winreg.CreateKey(winreg.HKEY_CURRENT_USER, self.clsid_key) as key:
+                winreg.SetValueEx(key, "", 0, winreg.REG_SZ, "")
+            # Khởi động lại explorer ngầm để có hiệu lực ngay
+            run_cmd(["taskkill", "/f", "/im", "explorer.exe"], timeout=5)
+            run_cmd(["cmd", "/c", "start", "explorer.exe"], timeout=5)
+            return True, "Đã khôi phục Menu chuột phải cổ điển Windows 11."
+        except Exception as e:
+            return False, f"Lỗi áp dụng: {e}"
+
+    def revert(self) -> Tuple[bool, str]:
+        try:
+            parent = r"Software\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}"
+            try:
+                winreg.DeleteKey(winreg.HKEY_CURRENT_USER, self.clsid_key)
+            except Exception:
+                pass
+            try:
+                winreg.DeleteKey(winreg.HKEY_CURRENT_USER, parent)
+            except Exception:
+                pass
+            run_cmd(["taskkill", "/f", "/im", "explorer.exe"], timeout=5)
+            run_cmd(["cmd", "/c", "start", "explorer.exe"], timeout=5)
+            return True, "Đã khôi phục Menu chuột phải mặc định của Windows 11."
+        except Exception as e:
+            return False, f"Lỗi hoàn tác: {e}"
 
 
 def get_performance_tweaks() -> list[Tweak]:
@@ -180,5 +234,7 @@ def get_performance_tweaks() -> list[Tweak]:
         MenuShowDelayTweak(),
         DisableGameDVRTweak(),
         DisableStartupDelayTweak(),
-        OptimizeTcpAutoTuningTweak()
+        OptimizeTcpAutoTuningTweak(),
+        Win11ClassicContextMenuTweak()
     ]
+

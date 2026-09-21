@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   build-and-release:
-    name: Build Windows Binary & Release
+    name: Build Windows Binary & OBS-Style Installer
     runs-on: windows-latest
 
     steps:
@@ -33,18 +33,36 @@ jobs:
         run: |
           python build_exe.py
 
+      - name: Install Inno Setup
+        shell: powershell
+        run: |
+          choco install innosetup --no-progress
+
+      - name: Build Windows Setup Installer (OBS-Style)
+        shell: powershell
+        run: |
+          $ver = "${{ github.ref_name }}".TrimStart('v')
+          if (-not $ver) { $ver = "1.0.0" }
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "/DMyAppVersion=$ver" "installer_setup.iss"
+
       - name: Create Release Archive & Checksums
         shell: powershell
         run: |
-          Compress-Archive -Path 'dist\WindowsDeepOptimizer.exe', 'README.md', 'LICENSE' -DestinationPath 'dist\WindowsDeepOptimizer-v1.0.0.zip' -Force
+          $tag = "${{ github.ref_name }}"
+          if (-not $tag) { $tag = "v1.0.0" }
+          Compress-Archive -Path 'dist\WindowsDeepOptimizer.exe', 'README.md', 'LICENSE' -DestinationPath "dist\WindowsDeepOptimizer-$tag.zip" -Force
           (Get-FileHash 'dist\WindowsDeepOptimizer.exe' -Algorithm SHA256).Hash | Set-Content 'dist\checksums.txt'
+          if (Test-Path 'installer_output\WindowsDeepOptimizer_Setup.exe') {
+            (Get-FileHash 'installer_output\WindowsDeepOptimizer_Setup.exe' -Algorithm SHA256).Hash | Add-Content 'dist\checksums.txt'
+          }
 
       - name: Publish GitHub Release with Assets
         uses: softprops/action-gh-release@v2
         with:
           files: |
+            installer_output/WindowsDeepOptimizer_Setup.exe
             dist/WindowsDeepOptimizer.exe
-            dist/WindowsDeepOptimizer-v1.0.0.zip
+            dist/WindowsDeepOptimizer-*.zip
             dist/checksums.txt
           tag_name: ${{ github.ref_name || 'v1.0.0' }}
           name: "Windows Deep Optimizer ${{ github.ref_name || 'v1.0.0' }}"

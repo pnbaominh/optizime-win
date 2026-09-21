@@ -37,5 +37,33 @@ class TestCoreModules(unittest.TestCase):
     def test_bloatware_list(self):
         self.assertGreater(len(SAFE_BLOATWARE_LIST), 0)
 
+    def test_process_utils_hidden(self):
+        from core.process_utils import run_cmd
+        res = run_cmd(["cmd.exe", "/c", "echo", "HELLO_HIDDEN_CMD"], timeout=5)
+        self.assertEqual(res.returncode, 0)
+        self.assertIn("HELLO_HIDDEN_CMD", res.stdout)
+
+    def test_version_logic(self):
+        from core.version import parse_version_tuple, is_newer_version
+        self.assertEqual(parse_version_tuple("v1.0.0"), (1, 0, 0))
+        self.assertEqual(parse_version_tuple("1.2.3.4"), (1, 2, 3, 4))
+        self.assertTrue(is_newer_version("v1.1.0", "1.0.0"))
+        self.assertTrue(is_newer_version("2.0.0", "1.9.9"))
+        self.assertFalse(is_newer_version("1.0.0", "1.0.0"))
+        self.assertFalse(is_newer_version("0.9.9", "1.0.0"))
+
+    def test_startup_manager(self):
+        from core.startup_manager import list_startup_items
+        items = list_startup_items()
+        self.assertIsInstance(items, list)
+
+    def test_classic_context_menu_tweak(self):
+        from core.performance import Win11ClassicContextMenuTweak
+        tweak = Win11ClassicContextMenuTweak()
+        self.assertEqual(tweak.id, "perf_win11_classic_context")
+        state = tweak.check()
+        self.assertIsInstance(state, bool)
+
 if __name__ == "__main__":
     unittest.main()
+

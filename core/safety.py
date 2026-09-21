@@ -1,8 +1,8 @@
 import os
-import subprocess
 import json
 import winreg
 from datetime import datetime
+from core.process_utils import run_cmd
 
 BACKUP_DIR = os.path.join(os.environ.get("APPDATA", "C:\\"), "WindowsDeepOptimizer", "backups")
 
@@ -19,7 +19,7 @@ def enable_system_restore_on_c() -> tuple[bool, str]:
             "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass",
             "-Command", "Enable-ComputerRestore -Drive 'C:\\' -ErrorAction Stop"
         ]
-        res = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+        res = run_cmd(cmd, timeout=15)
         if res.returncode == 0:
             return True, "Đã bật System Restore trên ổ C: thành công."
         return False, f"Lỗi khi bật System Restore: {res.stderr.strip()}"
@@ -46,7 +46,7 @@ def create_system_restore_point(description: str = "Before_Optimization") -> tup
     cmd = ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps_cmd]
 
     try:
-        res = subprocess.run(cmd, capture_output=True, text=True, timeout=35)
+        res = run_cmd(cmd, timeout=35)
         if res.returncode == 0:
             return True, f"Tạo điểm khôi phục thành công: {full_desc}"
         else:
@@ -56,7 +56,7 @@ def create_system_restore_point(description: str = "Before_Optimization") -> tup
                 # Thử tự động bật
                 enable_ok, _ = enable_system_restore_on_c()
                 if enable_ok:
-                    res2 = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+                    res2 = run_cmd(cmd, timeout=30)
                     if res2.returncode == 0:
                         return True, f"Đã bật System Restore và tạo điểm khôi phục thành công: {full_desc}"
             return False, f"Lỗi tạo Restore Point: {err}"
@@ -74,7 +74,7 @@ def list_system_restore_points() -> list[dict]:
     )
     cmd = ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps_cmd]
     try:
-        res = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        res = run_cmd(cmd, timeout=10)
         if res.returncode == 0 and res.stdout.strip():
             data = json.loads(res.stdout)
             if isinstance(data, dict):
@@ -98,7 +98,7 @@ def backup_registry_key(key_path: str, backup_name: str) -> tuple[bool, str]:
         filepath = os.path.join(backup_dir, filename)
 
         cmd = ["reg.exe", "export", key_path, filepath, "/y"]
-        res = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        res = run_cmd(cmd, timeout=10)
         if res.returncode == 0:
             return True, filepath
         else:
@@ -112,7 +112,7 @@ def restore_registry_from_file(filepath: str) -> tuple[bool, str]:
         return False, f"Tệp sao lưu không tồn tại: {filepath}"
     try:
         cmd = ["reg.exe", "import", filepath]
-        res = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        res = run_cmd(cmd, timeout=10)
         if res.returncode == 0:
             return True, "Khôi phục Registry từ file thành công."
         else:

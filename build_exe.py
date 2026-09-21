@@ -34,7 +34,9 @@ def build():
         "--uac-admin",
         "--clean",
         "--name", "WindowsDeepOptimizer",
+        "--icon=assets/app.ico",
         f"--add-data={ctk_dir};customtkinter",
+        "--add-data=assets;assets",
         "main.py"
     ]
 

@@ -1,20 +1,38 @@
-; Script tạo bộ cài đặt chuyên nghiệp bằng Inno Setup
+; =====================================================================
+; Script tạo bộ cài đặt tiêu chuẩn chuyên nghiệp bằng Inno Setup (OBS-Style)
 ; Dành cho Windows Deep Optimizer
+; =====================================================================
+
+#define MyAppName "Windows Deep Optimizer"
+#define MyAppVersion "1.1.0"
+#define MyAppPublisher "Bim"
+#define MyAppURL "https://github.com/pnbaominh/optizime-win"
+#define MyAppExeName "WindowsDeepOptimizer.exe"
 
 [Setup]
 AppId={{9F57B7B8-356C-4B1A-98C3-08D3893FA22E}
-AppName=Windows Deep Optimizer
-AppVersion=1.0.0
-AppPublisher=Bim
-DefaultDirName={autopf}\WindowsDeepOptimizer
-DefaultGroupName=Windows Deep Optimizer
+AppName={#MyAppName}
+AppVersion={#MyAppVersion}
+AppPublisher={#MyAppPublisher}
+AppPublisherURL={#MyAppURL}
+AppSupportURL={#MyAppURL}/issues
+AppUpdatesURL={#MyAppURL}/releases
+DefaultDirName={autopf}\{#MyAppName}
+DefaultGroupName={#MyAppName}
+DisableProgramGroupPage=yes
 OutputDir=installer_output
-OutputBaseFilename=WindowsDeepOptimizer_Setup_v1.0
+OutputBaseFilename=WindowsDeepOptimizer_Setup
 Compression=lzma2/ultra64
 SolidCompression=yes
 PrivilegesRequired=admin
 ArchitecturesInstallIn64BitMode=x64compatible
 WizardStyle=modern
+AppMutex=WindowsDeepOptimizerMutex
+CloseApplications=yes
+RestartApplications=yes
+SetupIconFile=assets\app.ico
+UninstallDisplayIcon={app}\assets\app.ico
+UninstallDisplayName={#MyAppName}
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
@@ -23,12 +41,15 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
 
 [Files]
-Source: "dist\WindowsDeepOptimizer.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "dist\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
+Source: "assets\*"; DestDir: "{app}\assets"; Flags: ignoreversion recursesubdirs
+Source: "README.md"; DestDir: "{app}"; Flags: ignoreversion
+Source: "LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{group}\Windows Deep Optimizer"; Filename: "{app}\WindowsDeepOptimizer.exe"
-Name: "{group}\{cm:UninstallProgram,Windows Deep Optimizer}"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\Windows Deep Optimizer"; Filename: "{app}\WindowsDeepOptimizer.exe"; Tasks: desktopicon
+Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\assets\app.ico"
+Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
+Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon; IconFilename: "{app}\assets\app.ico"
 
 [Run]
-Filename: "{app}\WindowsDeepOptimizer.exe"; Description: "{cm:LaunchProgram,Windows Deep Optimizer}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#MyAppName}}"; Flags: nowait postinstall skipifsilent runascurrentuser

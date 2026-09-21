@@ -1,12 +1,28 @@
-import subprocess
+import winreg
 from typing import Tuple
 from core.tweak_base import Tweak
+from core.process_utils import run_cmd
 
 def get_service_start_type(service_name: str) -> str:
-    """Lấy kiểu khởi động của Windows Service qua lệnh sc.exe qc."""
+    """Lấy kiểu khởi động của Windows Service qua Registry và lệnh sc.exe qc."""
+    # 1. Thử đọc trực tiếp từ Registry (nhanh và chính xác tuyệt đối)
+    try:
+        sub_key = rf"SYSTEM\CurrentControlSet\Services\{service_name}"
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, sub_key, 0, winreg.KEY_READ | winreg.KEY_WOW64_64KEY) as key:
+            val, typ = winreg.QueryValueEx(key, "Start")
+            if val == 4:
+                return "DISABLED"
+            elif val == 3:
+                return "MANUAL"
+            elif val == 2:
+                return "AUTO"
+    except Exception:
+        pass
+
+    # 2. Dự phòng qua lệnh sc.exe qc
     try:
         cmd = ["sc.exe", "qc", service_name]
-        res = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+        res = run_cmd(cmd, timeout=5)
         if res.returncode == 0:
             for line in res.stdout.splitlines():
                 if "START_TYPE" in line:
@@ -25,19 +41,39 @@ def set_service_start_type(service_name: str, start_type: str) -> Tuple[bool, st
     """
     Đặt kiểu khởi động cho Windows Service:
     start_type: 'disabled', 'demand' (manual), hoặc 'auto'
-    Lưu ý cú pháp sc: 'start= disabled' (bắt buộc có khoảng trắng sau dấu bằng).
     """
+    start_val_map = {
+        "disabled": 4,
+        "demand": 3,
+        "manual": 3,
+        "auto": 2
+    }
+    target_val = start_val_map.get(start_type.lower(), 3)
+    reg_ok = False
+
+    # 1. Ghi trực tiếp vào Registry
     try:
-        cmd = ["sc.exe", "config", service_name, f"start= {start_type}"]
-        res = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
-        if res.returncode == 0:
-            # Nếu disable thì dừng luôn dịch vụ đang chạy
-            if start_type == "disabled":
-                subprocess.run(["sc.exe", "stop", service_name], capture_output=True, text=True, timeout=5)
-            return True, f"Dịch vụ {service_name} đã được đặt thành {start_type}."
-        return False, f"Lỗi cấu hình {service_name}: {res.stderr.strip() or res.stdout.strip()}"
-    except Exception as e:
-        return False, str(e)
+        sub_key = rf"SYSTEM\CurrentControlSet\Services\{service_name}"
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, sub_key, 0, winreg.KEY_SET_VALUE | winreg.KEY_WOW64_64KEY) as key:
+            winreg.SetValueEx(key, "Start", 0, winreg.REG_DWORD, target_val)
+            reg_ok = True
+    except Exception:
+        reg_ok = False
+
+    # 2. Chạy lệnh sc.exe config
+    sc_start = "demand" if start_type.lower() in ("manual", "demand") else start_type.lower()
+    cmd = ["sc.exe", "config", service_name, f"start= {sc_start}"]
+    res = run_cmd(cmd, timeout=10)
+
+    # 3. Dừng dịch vụ nếu chọn disabled
+    if start_type.lower() == "disabled":
+        run_cmd(["sc.exe", "stop", service_name], timeout=5)
+
+    if reg_ok or res.returncode == 0:
+        return True, f"Dịch vụ {service_name} đã được đặt thành {start_type}."
+    else:
+        err = res.stderr.strip() or res.stdout.strip() or "Yêu cầu quyền Administrator."
+        return False, f"Lỗi cấu hình {service_name}: {err}"
 
 
 class ServiceTweak(Tweak):
@@ -176,7 +212,7 @@ class DisableCompatibilityAppraiserTweak(Tweak):
     def check(self) -> bool:
         try:
             cmd = ["schtasks.exe", "/Query", "/TN", self.task_path]
-            res = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+            res = run_cmd(cmd, timeout=5)
             if res.returncode == 0:
                 return "Disabled" in res.stdout
             return False
@@ -186,7 +222,7 @@ class DisableCompatibilityAppraiserTweak(Tweak):
     def apply(self) -> Tuple[bool, str]:
         try:
             cmd = ["schtasks.exe", "/Change", "/TN", self.task_path, "/Disable"]
-            res = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+            res = run_cmd(cmd, timeout=10)
             if res.returncode == 0:
                 return True, "Đã vô hiệu hóa Compatibility Appraiser Task thành công."
             return False, res.stderr.strip() or res.stdout.strip()
@@ -196,7 +232,7 @@ class DisableCompatibilityAppraiserTweak(Tweak):
     def revert(self) -> Tuple[bool, str]:
         try:
             cmd = ["schtasks.exe", "/Change", "/TN", self.task_path, "/Enable"]
-            res = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+            res = run_cmd(cmd, timeout=10)
             if res.returncode == 0:
                 return True, "Đã bật lại Compatibility Appraiser Task."
             return False, res.stderr.strip() or res.stdout.strip()

@@ -2,8 +2,8 @@ import sys
 import os
 import ctypes
 import platform
-import subprocess
 import shutil
+from core.process_utils import run_cmd
 
 def is_admin() -> bool:
     """Kiểm tra ứng dụng có đang chạy với quyền Administrator hay không."""
@@ -24,8 +24,10 @@ def elevate_if_not_admin() -> bool:
             executable = sys.executable
             args = ""
         else:
-            # Chạy từ source python
-            executable = sys.executable
+            # Chạy từ source python - dùng pythonw.exe để không hiện CMD nếu có
+            py_dir = os.path.dirname(sys.executable)
+            pythonw = os.path.join(py_dir, "pythonw.exe")
+            executable = pythonw if os.path.exists(pythonw) else sys.executable
             args = f'"{os.path.abspath(sys.argv[0])}"'
             if len(sys.argv) > 1:
                 args += " " + " ".join([f'"{arg}"' for arg in sys.argv[1:]])
@@ -109,7 +111,7 @@ def is_system_restore_enabled() -> bool:
             "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass",
             "-Command", "Get-ComputerRestorePoint -ErrorAction SilentlyContinue"
         ]
-        res = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+        res = run_cmd(cmd, timeout=5)
         # Nếu lệnh chạy không báo lỗi nghiêm trọng nghĩa là System Restore đang hoạt động
         return res.returncode == 0
     except Exception:

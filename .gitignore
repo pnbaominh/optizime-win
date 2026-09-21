@@ -43,3 +43,10 @@ $RECYCLE.BIN/
 # IDE
 .vscode/
 .idea/
+
+# Installer & Nested copies
+installer_output/
+optizime win/
+.g2a/
+
+

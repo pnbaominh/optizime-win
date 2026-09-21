@@ -125,18 +125,27 @@ class TweakCard(ctk.CTkFrame):
 
     def _handle_switch_click(self):
         new_val = self.switch_var.get()
+        self.switch.configure(state="disabled")
+        self.status_badge.configure(
+            text="ĐANG XỬ LÝ...",
+            text_color="#38bdf8",
+            fg_color="#082f49"
+        )
         self.on_toggle(self.tweak, new_val)
-        self.refresh_state()
 
     def refresh_state(self):
         """Đọc lại trạng thái thực tế và cập nhật giao diện."""
-        is_applied = self.tweak.check()
-        self.switch_var.set(is_applied)
-        self.status_badge.configure(
-            text="ĐÃ BẬT" if is_applied else "MẶC ĐỊNH",
-            text_color=COLOR_SUCCESS if is_applied else COLOR_WARNING,
-            fg_color="#064e3b" if is_applied else "#451a03"
-        )
+        try:
+            is_applied = self.tweak.check()
+            self.switch_var.set(is_applied)
+            self.switch.configure(state="normal")
+            self.status_badge.configure(
+                text="ĐÃ BẬT" if is_applied else "MẶC ĐỊNH",
+                text_color=COLOR_SUCCESS if is_applied else COLOR_WARNING,
+                fg_color="#064e3b" if is_applied else "#451a03"
+            )
+        except Exception:
+            self.switch.configure(state="normal")
 
 
 class StatBox(ctk.CTkFrame):
