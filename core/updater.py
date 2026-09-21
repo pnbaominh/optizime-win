@@ -139,6 +139,22 @@ def download_and_install_update(
             # Nếu là Inno Setup: /SILENT hoặc /VERYSILENT /CLOSEAPPLICATIONS /RESTARTAPPLICATIONS
             import ctypes
             if os.path.exists(target_installer):
+                # Xóa sạch các biến môi trường PyInstaller kế thừa từ tiến trình cũ
+                # Ngăn ngừa lỗi bootloader: "Security validation failure: invalid originating onefile parent process (PID not found)"
+                for env_k in list(os.environ.keys()):
+                    if env_k.startswith("_PYI") or env_k.startswith("_MEIPASS"):
+                        os.environ.pop(env_k, None)
+                        try:
+                            ctypes.windll.kernel32.SetEnvironmentVariableW(env_k, None)
+                        except Exception:
+                            pass
+
+                os.environ["PYINSTALLER_RESET_ENVIRONMENT"] = "1"
+                try:
+                    ctypes.windll.kernel32.SetEnvironmentVariableW("PYINSTALLER_RESET_ENVIRONMENT", "1")
+                except Exception:
+                    pass
+
                 # Khởi động trình cài đặt với quyền Administrator
                 ret = ctypes.windll.shell32.ShellExecuteW(
                     None,

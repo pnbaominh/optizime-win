@@ -4,7 +4,7 @@
 ; =====================================================================
 
 #define MyAppName "Windows Deep Optimizer"
-#define MyAppVersion "1.1.1"
+#define MyAppVersion "1.1.2"
 #define MyAppPublisher "Bim"
 #define MyAppURL "https://github.com/pnbaominh/optizime-win"
 #define MyAppExeName "WindowsDeepOptimizer.exe"
@@ -53,3 +53,21 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#MyAppName}}"; Flags: nowait postinstall skipifsilent runascurrentuser
+
+[Code]
+function SetEnvVarNull(lpName: String; lpValue: LongInt): BOOL;
+external 'SetEnvironmentVariableW@kernel32.dll stdcall';
+
+function SetEnvVarStr(lpName: String; lpValue: String): BOOL;
+external 'SetEnvironmentVariableW@kernel32.dll stdcall';
+
+function InitializeSetup(): Boolean;
+begin
+  // Xoa triet de cac bien moi truong PyInstaller ke thua tu tien trinh cu
+  SetEnvVarNull('_PYI_PARENT_PID', 0);
+  SetEnvVarNull('_MEIPASS2', 0);
+  SetEnvVarNull('_PYI_APPLICATION_HOME_DIR', 0);
+  SetEnvVarNull('_PYI_SPLASH_IPC', 0);
+  SetEnvVarStr('PYINSTALLER_RESET_ENVIRONMENT', '1');
+  Result := True;
+end;
