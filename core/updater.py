@@ -65,10 +65,37 @@ class UpdateChecker:
                             "installer_name": installer_name,
                             "size_bytes": installer_size
                         }
-            return None
+                    else:
+                        return {
+                            "has_update": False,
+                            "status": "latest",
+                            "current_version": APP_VERSION,
+                            "latest_version": remote_tag
+                        }
+            return {"has_update": False, "status": "unknown"}
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                return {
+                    "has_update": False,
+                    "status": "not_found",
+                    "error": (
+                        "Không tìm thấy bản phát hành trên GitHub (Mã lỗi 404).\n\n"
+                        "Vui lòng kiểm tra 2 điều sau:\n"
+                        "1. GitHub Actions cần khoảng 2-3 phút để biên dịch xong sau khi push tag.\n"
+                        "2. Repository GitHub phải ở chế độ PUBLIC (Công khai). Nếu repo đang ở Private, GitHub sẽ từ chối cung cấp bản cập nhật cho ứng dụng."
+                    )
+                }
+            return {
+                "has_update": False,
+                "status": "http_error",
+                "error": f"Lỗi phản hồi từ GitHub: HTTP {e.code} - {e.reason}"
+            }
         except Exception as e:
-            # Không làm gián đoạn người dùng nếu mất mạng hoặc repo chưa có release
-            return None
+            return {
+                "has_update": False,
+                "status": "network_error",
+                "error": f"Không thể kết nối đến máy chủ GitHub: {e}"
+            }
 
 def download_and_install_update(
     download_url: str,

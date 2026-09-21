@@ -1129,6 +1129,14 @@ class MainWindow(ctk.CTk):
             update_info = UpdateChecker.check_for_updates()
             if update_info and update_info.get("has_update"):
                 self.after(0, lambda: UpdateDialog(self, update_info))
+            elif update_info and update_info.get("status") == "not_found":
+                err_msg = update_info.get("error", "Chưa tìm thấy bản phát hành trên GitHub.")
+                self.log(f"[!] {err_msg}")
+                self.after(0, lambda: messagebox.showwarning("Thông Báo Cập Nhật", err_msg))
+            elif update_info and update_info.get("status") in ("http_error", "network_error"):
+                err_msg = update_info.get("error", "Lỗi kết nối GitHub.")
+                self.log(f"[!] {err_msg}")
+                self.after(0, lambda: messagebox.showerror("Lỗi Cập Nhật", err_msg))
             else:
                 self.after(0, lambda: messagebox.showinfo(
                     "Kiểm Tra Cập Nhật",
