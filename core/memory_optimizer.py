@@ -81,14 +81,62 @@ class PROCESSENTRY32(ctypes.Structure):
         ('szExeFile', ctypes.c_char * 260)
     ]
 
+# -------------------------------------------------------------
+# WIN32 & NTDLL API DECLARATIONS (Explicit 64-bit argtypes & restype)
+# -------------------------------------------------------------
+kernel32 = ctypes.windll.kernel32
+advapi32 = ctypes.windll.advapi32
+ntdll = ctypes.windll.ntdll
+psapi = ctypes.windll.psapi
+
+# kernel32
+kernel32.GetCurrentProcess.restype = wintypes.HANDLE
+kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+kernel32.OpenProcess.restype = wintypes.HANDLE
+kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+kernel32.CloseHandle.restype = wintypes.BOOL
+kernel32.SetProcessWorkingSetSize.argtypes = [wintypes.HANDLE, ctypes.c_size_t, ctypes.c_size_t]
+kernel32.SetProcessWorkingSetSize.restype = wintypes.BOOL
+kernel32.CreateToolhelp32Snapshot.argtypes = [wintypes.DWORD, wintypes.DWORD]
+kernel32.CreateToolhelp32Snapshot.restype = wintypes.HANDLE
+kernel32.Process32First.argtypes = [wintypes.HANDLE, ctypes.POINTER(PROCESSENTRY32)]
+kernel32.Process32First.restype = wintypes.BOOL
+kernel32.Process32Next.argtypes = [wintypes.HANDLE, ctypes.POINTER(PROCESSENTRY32)]
+kernel32.Process32Next.restype = wintypes.BOOL
+kernel32.GlobalMemoryStatusEx.argtypes = [ctypes.POINTER(MEMORYSTATUSEX)]
+kernel32.GlobalMemoryStatusEx.restype = wintypes.BOOL
+
+# advapi32
+advapi32.OpenProcessToken.argtypes = [wintypes.HANDLE, wintypes.DWORD, ctypes.POINTER(wintypes.HANDLE)]
+advapi32.OpenProcessToken.restype = wintypes.BOOL
+advapi32.LookupPrivilegeValueW.argtypes = [wintypes.LPCWSTR, wintypes.LPCWSTR, ctypes.POINTER(LUID)]
+advapi32.LookupPrivilegeValueW.restype = wintypes.BOOL
+advapi32.AdjustTokenPrivileges.argtypes = [
+    wintypes.HANDLE,
+    wintypes.BOOL,
+    ctypes.POINTER(TOKEN_PRIVILEGES),
+    wintypes.DWORD,
+    ctypes.c_void_p,
+    ctypes.c_void_p
+]
+advapi32.AdjustTokenPrivileges.restype = wintypes.BOOL
+
+# psapi
+psapi.EmptyWorkingSet.argtypes = [wintypes.HANDLE]
+psapi.EmptyWorkingSet.restype = wintypes.BOOL
+psapi.GetPerformanceInfo.argtypes = [ctypes.POINTER(PERFORMANCE_INFORMATION), wintypes.DWORD]
+psapi.GetPerformanceInfo.restype = wintypes.BOOL
+
+# ntdll
+ntdll.NtSetSystemInformation.argtypes = [ctypes.c_int, ctypes.c_void_p, wintypes.ULONG]
+ntdll.NtSetSystemInformation.restype = ctypes.c_long
+
 def enable_privilege(priv_name: str) -> bool:
     """Kích hoạt quyền hệ thống (Privilege) cho tiến trình hiện tại."""
     try:
-        advapi32 = ctypes.windll.advapi32
-        kernel32 = ctypes.windll.kernel32
-
         h_token = wintypes.HANDLE()
-        if not advapi32.OpenProcessToken(kernel32.GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, ctypes.byref(h_token)):
+        h_process = kernel32.GetCurrentProcess()
+        if not advapi32.OpenProcessToken(h_process, TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, ctypes.byref(h_token)):
             return False
 
         try:
@@ -101,9 +149,10 @@ def enable_privilege(priv_name: str) -> bool:
             tp.Privileges[0].Luid = luid
             tp.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED
 
+            kernel32.SetLastError(0)
             ret = advapi32.AdjustTokenPrivileges(h_token, False, ctypes.byref(tp), ctypes.sizeof(tp), None, None)
             err = kernel32.GetLastError()
-            return ret != 0 and err == 0
+            return bool(ret) and (err == 0)
         finally:
             kernel32.CloseHandle(h_token)
     except Exception:
@@ -232,12 +281,12 @@ def trim_all_working_sets() -> Tuple[bool, str, int, int]:
 def purge_standby_list() -> Tuple[bool, str, int]:
     """
     Xóa sạch bộ nhớ đệm Standby List qua Windows NT Native API (NtSetSystemInformation).
-    Yêu cầu đặc quyền SeProfileSingleProcessPrivilege.
+    Yêu cầu đặc quyền SeProfileSingleProcessPrivilege và quyền Administrator.
     """
     priv_ok = enable_privilege("SeProfileSingleProcessPrivilege")
+    enable_privilege("SeIncreaseQuotaPrivilege")
 
     before_info = get_detailed_memory_info()
-    ntdll = ctypes.windll.ntdll
 
     # 1. Purge toàn bộ Standby List (Command 4: MemoryPurgeStandbyList)
     cmd_standby = ctypes.c_int(MEMORY_PURGE_STANDBY_LIST)
@@ -246,6 +295,17 @@ def purge_standby_list() -> Tuple[bool, str, int]:
         ctypes.byref(cmd_standby),
         ctypes.sizeof(cmd_standby)
     )
+
+    # Nếu lệnh 4 gặp trở ngại trên một số phiên bản Windows, thử fallback lệnh 5 (MemoryPurgeLowPriorityStandbyList)
+    if status1 != 0:
+        cmd_low = ctypes.c_int(MEMORY_PURGE_LOW_PRIORITY_STANDBY_LIST)
+        status_low = ntdll.NtSetSystemInformation(
+            SYSTEM_MEMORY_LIST_INFORMATION,
+            ctypes.byref(cmd_low),
+            ctypes.sizeof(cmd_low)
+        )
+        if status_low == 0:
+            status1 = 0
 
     # 2. Thu gọn System Working Sets (Command 2: MemoryEmptyWorkingSets)
     cmd_sys = ctypes.c_int(MEMORY_EMPTY_WORKING_SETS)
@@ -264,10 +324,10 @@ def purge_standby_list() -> Tuple[bool, str, int]:
             msg += f" Giải phóng thêm ~{freed_mb} MB RAM."
         return True, msg, freed_mb
     else:
-        # Nếu thiếu quyền admin
-        if not priv_ok or (status1 & 0xFFFFFFFF) == 0xC0000061:
+        err_code = status1 & 0xFFFFFFFF
+        if err_code == 0xC0000061 or not priv_ok:
             return False, "Cần chạy ứng dụng với quyền Administrator để xóa Standby List hệ thống.", 0
-        return False, f"NtSetSystemInformation trả về mã lỗi: {hex(status1 & 0xFFFFFFFF)}", 0
+        return False, f"NtSetSystemInformation trả về mã lỗi: {hex(err_code)}", 0
 
 def full_memory_purge() -> Tuple[bool, str, int]:
     """
