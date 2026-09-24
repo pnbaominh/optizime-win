@@ -24,7 +24,27 @@ from core.version import APP_NAME, APP_VERSION, GITHUB_REPO_URL
 from core.updater import UpdateChecker
 from ui.update_dialog import UpdateDialog
 from core.startup_manager import list_startup_items, remove_startup_item
-from core.network_optimizer import flush_dns_cache, set_primary_dns, reset_dns_to_dhcp, DNS_PROVIDERS
+from core.network_optimizer import (
+    flush_dns_cache,
+    set_primary_dns,
+    set_custom_dns,
+    reset_dns_to_dhcp,
+    DNS_PROVIDERS,
+    get_active_adapter_info,
+    measure_ping_rtt,
+    benchmark_all_dns_parallel,
+    set_dns_leak_protection,
+    set_nagle_algorithm,
+    set_network_throttling,
+    set_qos_bandwidth_limit,
+    apply_tcp_global_tuning,
+    set_energy_saving_ethernet,
+    set_dns_cache_ttl_optimization,
+    set_ipv6_state,
+    get_network_optimization_status,
+    run_network_doctor,
+    restart_network_adapter
+)
 from core.memory_optimizer import (
     get_detailed_memory_info,
     trim_all_working_sets,
@@ -341,6 +361,8 @@ class MainWindow(ctk.CTk):
             self._update_dashboard_kpis()
         elif tab_id == "memory":
             self._refresh_memory_view()
+        elif tab_id == "network":
+            self._refresh_network_telemetry()
 
     # -------------------------------------------------------------
     # VIEW: DASHBOARD
@@ -1674,126 +1696,637 @@ class MainWindow(ctk.CTk):
                 messagebox.showerror("Lỗi", msg)
 
     # -------------------------------------------------------------
-    # VIEW: NETWORK, DNS & RAM CACHE
+    # VIEW: NETWORK, SMART DNS HUB & NETWORK DOCTOR
     # -------------------------------------------------------------
-    def _create_network_view(self) -> ctk.CTkFrame:
-        frame = ctk.CTkFrame(self.main_container, fg_color="transparent")
+    def _create_network_view(self) -> ctk.CTkScrollableFrame:
+        frame = ctk.CTkScrollableFrame(self.main_container, fg_color="transparent")
 
-        # Box 1: DNS Optimizer
-        dns_box = ctk.CTkFrame(frame, fg_color=COLOR_CARD_BG, border_color=COLOR_BORDER, border_width=1, corner_radius=8)
-        dns_box.pack(fill="x", pady=(0, 14))
+        # Header Title
+        title_box = ctk.CTkFrame(frame, fg_color=COLOR_CARD_BG, border_color=COLOR_BORDER, border_width=1, corner_radius=8)
+        title_box.pack(fill="x", pady=(0, 14))
 
-        ctk.CTkLabel(
-            dns_box,
-            text="🌐 Tối Ưu Hóa Tốc Độ Mạng & DNS An Toàn",
-            font=ctk.CTkFont(family=FONT_FAMILY, size=14, weight="bold"),
+        lbl_t = ctk.CTkLabel(
+            title_box,
+            text="🌐 Tối Ưu Hóa Mạng, Smart DNS & Bác Sĩ Mạng (Network Suite)",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=16, weight="bold"),
             text_color=COLOR_TEXT_WHITE
-        ).pack(anchor="w", padx=16, pady=(14, 4))
+        )
+        lbl_t.pack(anchor="w", padx=16, pady=(12, 2))
 
-        ctk.CTkLabel(
-            dns_box,
-            text="Sử dụng DNS tốc độ cao giúp lướt web nhanh hơn, giảm ping khi chơi game và ngăn ngừa theo dõi từ nhà mạng ISP.",
+        lbl_sub = ctk.CTkLabel(
+            title_box,
+            text="Chẩn đoán kết nối thời gian thực, đo tốc độ DNS Socket đa luồng chuẩn RFC 1035, siêu giảm ping Gaming TCP/IP và bộ sửa lỗi mạng 1-Click.",
             font=ctk.CTkFont(family=FONT_FAMILY, size=11),
             text_color=COLOR_TEXT_MUTED
-        ).pack(anchor="w", padx=16, pady=(0, 12))
+        )
+        lbl_sub.pack(anchor="w", padx=16, pady=(0, 12))
 
-        btn_row = ctk.CTkFrame(dns_box, fg_color="transparent")
-        btn_row.pack(fill="x", padx=16, pady=(0, 14))
+        # =========================================================
+        # Card 1: Chẩn Đoán & Trạng Thái Mạng Thời Gian Thực
+        # =========================================================
+        telemetry_card = ctk.CTkFrame(frame, fg_color=COLOR_CARD_BG, border_color=COLOR_BORDER, border_width=1, corner_radius=8)
+        telemetry_card.pack(fill="x", pady=(0, 14))
 
-        ctk.CTkButton(
-            btn_row,
-            text="⚡ Cloudflare DNS (1.1.1.1)",
+        tel_top = ctk.CTkFrame(telemetry_card, fg_color="transparent")
+        tel_top.pack(fill="x", padx=16, pady=(12, 6))
+
+        ctk.CTkLabel(
+            tel_top,
+            text="📡 Trạng Thái Card Mạng & Độ Trễ (Live Telemetry)",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=13, weight="bold"),
+            text_color=COLOR_TEXT_WHITE
+        ).pack(side="left")
+
+        self.btn_refresh_net = ctk.CTkButton(
+            tel_top,
+            text="🔄 Làm Mới Kết Nối",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=11, weight="bold"),
+            fg_color="#1e293b",
+            hover_color="#334155",
+            width=130,
+            height=28,
+            corner_radius=6,
+            command=self._refresh_network_telemetry
+        )
+        self.btn_refresh_net.pack(side="right")
+
+        # 4 Stat Boxes
+        tel_stats = ctk.CTkFrame(telemetry_card, fg_color="transparent")
+        tel_stats.pack(fill="x", padx=16, pady=(4, 10))
+        tel_stats.grid_columnconfigure((0, 1, 2, 3), weight=1)
+
+        self.box_net_adapter = StatBox(tel_stats, "CARD MẠNG CHÍNH", "Đang đọc...", "Kết nối Internet", height=85)
+        self.box_net_adapter.grid(row=0, column=0, sticky="ew", padx=(0, 4))
+
+        self.box_net_ip = StatBox(tel_stats, "ĐỊA CHỈ IPV4", "...", "Mạng nội bộ", badge_color="#38bdf8", height=85)
+        self.box_net_ip.grid(row=0, column=1, sticky="ew", padx=4)
+
+        self.box_net_gateway = StatBox(tel_stats, "GATEWAY ROUTER", "...", "Default Route", badge_color="#818cf8", height=85)
+        self.box_net_gateway.grid(row=0, column=2, sticky="ew", padx=4)
+
+        self.box_net_ping = StatBox(tel_stats, "PING RTT TỨC THỜI", "... ms", "Độ trễ Internet", badge_color=COLOR_SUCCESS, height=85)
+        self.box_net_ping.grid(row=0, column=3, sticky="ew", padx=(4, 0))
+
+        # Bottom detail row
+        self.lbl_net_dns_current = ctk.CTkLabel(
+            telemetry_card,
+            text="🔍 Máy chủ DNS đang kích hoạt: Đang kiểm tra...",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=11),
+            text_color="#94a3b8"
+        )
+        self.lbl_net_dns_current.pack(anchor="w", padx=16, pady=(0, 12))
+
+        # =========================================================
+        # Card 2: Trung Tâm Smart DNS Hub & Đo Tốc Độ Socket
+        # =========================================================
+        dns_card = ctk.CTkFrame(frame, fg_color=COLOR_CARD_BG, border_color=COLOR_BORDER, border_width=1, corner_radius=8)
+        dns_card.pack(fill="x", pady=(0, 14))
+
+        ctk.CTkLabel(
+            dns_card,
+            text="⚡ Trung Tâm Smart DNS & Đo Tốc Độ Siêu Tốc (UDP Port 53 Benchmark)",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=13, weight="bold"),
+            text_color=COLOR_TEXT_WHITE
+        ).pack(anchor="w", padx=16, pady=(12, 2))
+
+        ctk.CTkLabel(
+            dns_card,
+            text="Đo độ trễ thực tế qua socket UDP cổng 53 chuẩn RFC 1035 tới 10 nhà cung cấp DNS hàng đầu thế giới để chọn máy chủ phân giải nhanh nhất cho bạn.",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=11),
+            text_color=COLOR_TEXT_MUTED
+        ).pack(anchor="w", padx=16, pady=(0, 10))
+
+        # Benchmark Action Row
+        dns_action_row = ctk.CTkFrame(dns_card, fg_color="transparent")
+        dns_action_row.pack(fill="x", padx=16, pady=(0, 8))
+
+        self.btn_benchmark_dns = ctk.CTkButton(
+            dns_action_row,
+            text="🚀 Bắt Đầu Đo Tốc Độ (10 Nhà Cung Cấp)",
             font=ctk.CTkFont(family=FONT_FAMILY, size=11, weight="bold"),
             fg_color=COLOR_PRIMARY,
             hover_color=COLOR_PRIMARY_HOVER,
-            height=34,
-            command=lambda: self._handle_apply_dns("Cloudflare")
-        ).pack(side="left", padx=(0, 8))
+            height=32,
+            command=self._handle_benchmark_dns
+        )
+        self.btn_benchmark_dns.pack(side="left", padx=(0, 8))
 
-        ctk.CTkButton(
-            btn_row,
-            text="🔍 Google DNS (8.8.8.8)",
+        self.btn_auto_best_dns = ctk.CTkButton(
+            dns_action_row,
+            text="⚡ Áp Dụng DNS Tốt Nhất",
             font=ctk.CTkFont(family=FONT_FAMILY, size=11, weight="bold"),
             fg_color="#0891b2",
             hover_color="#0e7490",
-            height=34,
-            command=lambda: self._handle_apply_dns("Google")
-        ).pack(side="left", padx=8)
+            height=32,
+            command=self._handle_apply_best_dns
+        )
+        self.btn_auto_best_dns.pack(side="left", padx=8)
 
-        ctk.CTkButton(
-            btn_row,
-            text="🔄 Khôi Phục DNS Tự Động (DHCP)",
+        self.btn_reset_dhcp = ctk.CTkButton(
+            dns_action_row,
+            text="🔄 Khôi Phục DHCP Mặc Định",
             font=ctk.CTkFont(family=FONT_FAMILY, size=11),
             fg_color="#334155",
             hover_color="#475569",
-            height=34,
+            height=32,
             command=self._handle_reset_dns
-        ).pack(side="left", padx=8)
+        )
+        self.btn_reset_dhcp.pack(side="left", padx=8)
 
-        # Box 2: DNS Cache Flush
-        flush_box = ctk.CTkFrame(frame, fg_color=COLOR_CARD_BG, border_color=COLOR_BORDER, border_width=1, corner_radius=8)
-        flush_box.pack(fill="x", pady=(0, 14))
+        # Progress bar
+        self.dns_progress_bar = ctk.CTkProgressBar(dns_card, height=6, corner_radius=3, fg_color="#090d16", progress_color=COLOR_PRIMARY)
+        self.dns_progress_bar.pack(fill="x", padx=16, pady=(0, 6))
+        self.dns_progress_bar.set(0.0)
 
-        ctk.CTkLabel(
-            flush_box,
-            text="🧹 Xóa Bộ Nhớ Đệm DNS (Flush DNS Cache)",
-            font=ctk.CTkFont(family=FONT_FAMILY, size=13, weight="bold"),
-            text_color=COLOR_TEXT_WHITE
-        ).pack(anchor="w", padx=16, pady=(14, 4))
-
-        ctk.CTkLabel(
-            flush_box,
-            text="Làm mới bộ nhớ đệm phân giải tên miền để sửa lỗi không truy cập được website hoặc sau khi đổi DNS.",
-            font=ctk.CTkFont(family=FONT_FAMILY, size=11),
+        self.lbl_dns_benchmark_status = ctk.CTkLabel(
+            dns_card,
+            text="💡 Mẹo: Nhấn 'Bắt Đầu Đo Tốc Độ' để hệ thống tự động tìm máy chủ DNS có ping thấp nhất tại vị trí của bạn.",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=10),
             text_color=COLOR_TEXT_MUTED
-        ).pack(anchor="w", padx=16, pady=(0, 12))
+        )
+        self.lbl_dns_benchmark_status.pack(anchor="w", padx=16, pady=(0, 8))
+
+        # Providers List Frame
+        self.dns_list_frame = ctk.CTkFrame(dns_card, fg_color="transparent")
+        self.dns_list_frame.pack(fill="x", padx=16, pady=(0, 10))
+
+        self.dns_ping_labels = {}
+        self.dns_apply_buttons = {}
+        self.best_dns_provider = "Cloudflare"
+
+        for p_name, p_data in DNS_PROVIDERS.items():
+            row = ctk.CTkFrame(self.dns_list_frame, fg_color="#090d16", corner_radius=6)
+            row.pack(fill="x", pady=3)
+
+            # Left block: Info
+            info_frame = ctk.CTkFrame(row, fg_color="transparent")
+            info_frame.pack(side="left", padx=12, pady=6, fill="both", expand=True)
+
+            title_sub_row = ctk.CTkFrame(info_frame, fg_color="transparent")
+            title_sub_row.pack(anchor="w")
+
+            ctk.CTkLabel(
+                title_sub_row,
+                text=p_name,
+                font=ctk.CTkFont(family=FONT_FAMILY, size=12, weight="bold"),
+                text_color=COLOR_TEXT_WHITE
+            ).pack(side="left", padx=(0, 8))
+
+            badge_lbl = ctk.CTkLabel(
+                title_sub_row,
+                text=f" {p_data['badge']} ",
+                font=ctk.CTkFont(family=FONT_FAMILY, size=9, weight="bold"),
+                text_color="#0f172a",
+                fg_color=p_data.get("color", "#38bdf8"),
+                corner_radius=4
+            )
+            badge_lbl.pack(side="left")
+
+            desc_text = f"{p_data['desc']} • IP: {p_data['primary']}, {p_data['secondary']}"
+            ctk.CTkLabel(
+                info_frame,
+                text=desc_text,
+                font=ctk.CTkFont(family=FONT_FAMILY, size=10),
+                text_color=COLOR_TEXT_MUTED
+            ).pack(anchor="w", pady=(2, 0))
+
+            # Right block: Ping & Apply button
+            right_frame = ctk.CTkFrame(row, fg_color="transparent")
+            right_frame.pack(side="right", padx=12, pady=6)
+
+            ping_lbl = ctk.CTkLabel(
+                right_frame,
+                text="-- ms",
+                font=ctk.CTkFont(family=FONT_FAMILY, size=11, weight="bold"),
+                text_color="#94a3b8",
+                width=65
+            )
+            ping_lbl.pack(side="left", padx=(0, 8))
+            self.dns_ping_labels[p_name] = ping_lbl
+
+            apply_btn = ctk.CTkButton(
+                right_frame,
+                text="Áp Dụng",
+                font=ctk.CTkFont(family=FONT_FAMILY, size=11, weight="bold"),
+                fg_color="#1e293b",
+                hover_color="#334155",
+                width=75,
+                height=26,
+                corner_radius=5,
+                command=lambda name=p_name: self._handle_apply_dns(name)
+            )
+            apply_btn.pack(side="left")
+            self.dns_apply_buttons[p_name] = apply_btn
+
+        # Custom DNS Entry Frame
+        custom_frame = ctk.CTkFrame(dns_card, fg_color="#090d16", corner_radius=6)
+        custom_frame.pack(fill="x", padx=16, pady=(4, 12))
+
+        ctk.CTkLabel(
+            custom_frame,
+            text="🛠️ Điền DNS Tùy Chỉnh:",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=11, weight="bold"),
+            text_color=COLOR_TEXT_WHITE
+        ).pack(side="left", padx=(12, 8), pady=8)
+
+        self.entry_dns_primary = ctk.CTkEntry(
+            custom_frame,
+            placeholder_text="Primary DNS (vd: 1.1.1.1)",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=11),
+            width=180,
+            height=28
+        )
+        self.entry_dns_primary.pack(side="left", padx=4, pady=8)
+
+        self.entry_dns_secondary = ctk.CTkEntry(
+            custom_frame,
+            placeholder_text="Secondary DNS (vd: 1.0.0.1)",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=11),
+            width=180,
+            height=28
+        )
+        self.entry_dns_secondary.pack(side="left", padx=4, pady=8)
 
         ctk.CTkButton(
-            flush_box,
-            text="Xóa Sạch DNS Cache Ngay",
+            custom_frame,
+            text="Lưu DNS Này",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=11, weight="bold"),
+            fg_color="#0284c7",
+            hover_color="#0369a1",
+            width=100,
+            height=28,
+            command=self._handle_apply_custom_dns
+        ).pack(side="left", padx=8, pady=8)
+
+        # =========================================================
+        # Card 3: Tối Ưu Hóa TCP/IP Stack & Siêu Giảm Ping Gaming
+        # =========================================================
+        tcp_card = ctk.CTkFrame(frame, fg_color=COLOR_CARD_BG, border_color=COLOR_BORDER, border_width=1, corner_radius=8)
+        tcp_card.pack(fill="x", pady=(0, 14))
+
+        ctk.CTkLabel(
+            tcp_card,
+            text="🎮 Tinh Chỉnh TCP/IP Stack & Siêu Giảm Ping (Gaming & Streaming)",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=13, weight="bold"),
+            text_color=COLOR_TEXT_WHITE
+        ).pack(anchor="w", padx=16, pady=(12, 2))
+
+        ctk.CTkLabel(
+            tcp_card,
+            text="Can thiệp trực tiếp vào Registry TCP/IP và netsh interface để loại bỏ độ trễ gom gói Nagle, gỡ bóp băng thông đa phương tiện và mở khóa 100% QoS.",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=11),
+            text_color=COLOR_TEXT_MUTED
+        ).pack(anchor="w", padx=16, pady=(0, 10))
+
+        # Preset buttons row
+        tcp_preset_row = ctk.CTkFrame(tcp_card, fg_color="transparent")
+        tcp_preset_row.pack(fill="x", padx=16, pady=(0, 10))
+
+        ctk.CTkButton(
+            tcp_preset_row,
+            text="⚡ Chế Độ Gaming Siêu Giảm Ping",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=11, weight="bold"),
+            fg_color=COLOR_PRIMARY,
+            hover_color=COLOR_PRIMARY_HOVER,
+            height=32,
+            command=lambda: self._handle_apply_tcp_preset("gaming")
+        ).pack(side="left", padx=(0, 8))
+
+        ctk.CTkButton(
+            tcp_preset_row,
+            text="🚀 Chế Độ Tải Tốc Độ Cao",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=11, weight="bold"),
+            fg_color="#0891b2",
+            hover_color="#0e7490",
+            height=32,
+            command=lambda: self._handle_apply_tcp_preset("download")
+        ).pack(side="left", padx=8)
+
+        ctk.CTkButton(
+            tcp_preset_row,
+            text="🔄 Khôi Phục Mặc Định Windows",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=11),
+            fg_color="#334155",
+            hover_color="#475569",
+            height=32,
+            command=lambda: self._handle_apply_tcp_preset("default")
+        ).pack(side="left", padx=8)
+
+        # Switches Container
+        sw_container = ctk.CTkFrame(tcp_card, fg_color="#090d16", corner_radius=6)
+        sw_container.pack(fill="x", padx=16, pady=(0, 10))
+
+        self.sw_nagle = ctk.CTkSwitch(
+            sw_container,
+            text="Vô hiệu hóa thuật toán Nagle (TcpAckFrequency=1, TCPNoDelay=1, TcpDelAckTicks=0)\n(Gửi gói tin TCP tức thì, triệt tiêu độ trễ gom gói, giảm giật lag ping trong game online)",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=11, weight="bold"),
+            text_color=COLOR_TEXT_WHITE,
+            progress_color=COLOR_PRIMARY
+        )
+        self.sw_nagle.pack(anchor="w", padx=14, pady=6)
+
+        self.sw_throttling = ctk.CTkSwitch(
+            sw_container,
+            text="Vô hiệu hóa Network Throttling & Multimedia Responsiveness (0xFFFFFFFF)\n(Ngăn chặn Windows tự ý bóp băng thông mạng khi có ứng dụng khác đang phát đa phương tiện)",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=11, weight="bold"),
+            text_color=COLOR_TEXT_WHITE,
+            progress_color=COLOR_PRIMARY
+        )
+        self.sw_throttling.pack(anchor="w", padx=14, pady=6)
+
+        self.sw_qos = ctk.CTkSwitch(
+            sw_container,
+            text="Gỡ bỏ giới hạn dự trữ 20% băng thông của Windows (QoS NonBestEffortLimit=0)\n(Mở khóa toàn bộ 100% băng thông tải và truyền dữ liệu cho phần mềm)",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=11, weight="bold"),
+            text_color=COLOR_TEXT_WHITE,
+            progress_color=COLOR_PRIMARY
+        )
+        self.sw_qos.pack(anchor="w", padx=14, pady=6)
+
+        self.sw_dns_ttl = ctk.CTkSwitch(
+            sw_container,
+            text="Tối ưu hóa bộ nhớ đệm DNS Cache (MaxCacheTtl=86400, MaxNegativeCacheTtl=5)\n(Lưu tạm IP các website quen thuộc lâu hơn, giảm số lần truy vấn tên miền lặp lại)",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=11, weight="bold"),
+            text_color=COLOR_TEXT_WHITE,
+            progress_color=COLOR_PRIMARY
+        )
+        self.sw_dns_ttl.pack(anchor="w", padx=14, pady=6)
+
+        self.sw_dns_leak = ctk.CTkSwitch(
+            sw_container,
+            text="Chống rò rỉ DNS & Ngăn phân giải đa mạng (DisableSmartNameResolution)\n(Ngăn rò rỉ DNS sang mạng khác khi dùng VPN, bảo vệ danh tính và tăng tính riêng tư)",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=11, weight="bold"),
+            text_color=COLOR_TEXT_WHITE,
+            progress_color=COLOR_PRIMARY
+        )
+        self.sw_dns_leak.pack(anchor="w", padx=14, pady=6)
+
+        self.sw_eee = ctk.CTkSwitch(
+            sw_container,
+            text="Tắt tính năng tiết kiệm điện card mạng (Energy Efficient Ethernet / Green Ethernet)\n(Ngăn card mạng chuyển sang chế độ ngủ nông gây drop ping đột ngột)",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=11, weight="bold"),
+            text_color=COLOR_TEXT_WHITE,
+            progress_color=COLOR_PRIMARY
+        )
+        self.sw_eee.pack(anchor="w", padx=14, pady=6)
+
+        # Apply TCP settings row
+        tcp_apply_row = ctk.CTkFrame(tcp_card, fg_color="transparent")
+        tcp_apply_row.pack(fill="x", padx=16, pady=(4, 12))
+
+        self.btn_save_tcp = ctk.CTkButton(
+            tcp_apply_row,
+            text="💾 Lưu Cấu Hình TCP/IP Tinh Chỉnh",
             font=ctk.CTkFont(family=FONT_FAMILY, size=11, weight="bold"),
             fg_color=COLOR_SUCCESS,
             hover_color=COLOR_SUCCESS_HOVER,
-            height=34,
-            command=self._handle_flush_dns
-        ).pack(anchor="w", padx=16, pady=(0, 14))
+            width=220,
+            height=32,
+            command=self._handle_save_tcp_settings
+        )
+        self.btn_save_tcp.pack(side="left", padx=(0, 10))
 
-        # Box 3: Safe Memory Trim
-        ram_box = ctk.CTkFrame(frame, fg_color=COLOR_CARD_BG, border_color=COLOR_BORDER, border_width=1, corner_radius=8)
-        ram_box.pack(fill="x")
+        self.lbl_tcp_action_status = ctk.CTkLabel(
+            tcp_apply_row,
+            text="",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=11),
+            text_color="#34d399"
+        )
+        self.lbl_tcp_action_status.pack(side="left")
+
+        # =========================================================
+        # Card 4: Bác Sĩ Mạng & Bộ Sửa Lỗi 1-Click (Network Doctor)
+        # =========================================================
+        doctor_card = ctk.CTkFrame(frame, fg_color=COLOR_CARD_BG, border_color=COLOR_BORDER, border_width=1, corner_radius=8)
+        doctor_card.pack(fill="x", pady=(0, 14))
 
         ctk.CTkLabel(
-            ram_box,
-            text="🚀 Giải Phóng Bộ Nhớ Đệm RAM (Safe Working Set Trim)",
+            doctor_card,
+            text="🩺 Bác Sĩ Mạng & Bộ Cứu Hộ Đường Truyền 1-Click (Network Doctor)",
             font=ctk.CTkFont(family=FONT_FAMILY, size=13, weight="bold"),
             text_color=COLOR_TEXT_WHITE
-        ).pack(anchor="w", padx=16, pady=(14, 4))
+        ).pack(anchor="w", padx=16, pady=(12, 2))
 
         ctk.CTkLabel(
-            ram_box,
-            text="Thu gọn bộ nhớ làm việc của các tiến trình không còn sử dụng về đĩa, trả lại bộ nhớ RAM vật lý tức thì một cách an toàn.",
+            doctor_card,
+            text="Bộ công cụ sửa chữa chuyên sâu khi gặp sự cố: mất mạng, chấm than vàng, rớt gói (packet loss), kẹt DNS hoặc không nhận địa chỉ IP.",
             font=ctk.CTkFont(family=FONT_FAMILY, size=11),
             text_color=COLOR_TEXT_MUTED
-        ).pack(anchor="w", padx=16, pady=(0, 12))
+        ).pack(anchor="w", padx=16, pady=(0, 10))
 
-        ctk.CTkButton(
-            ram_box,
-            text="Giải Phóng Bộ Nhớ RAM Ngay",
+        # Doctor Actions
+        doc_btn_row = ctk.CTkFrame(doctor_card, fg_color="transparent")
+        doc_btn_row.pack(fill="x", padx=16, pady=(0, 10))
+
+        self.btn_doctor = ctk.CTkButton(
+            doc_btn_row,
+            text="🩺 Bác Sĩ Mạng (Sửa Tự Động 5 Bước)",
             font=ctk.CTkFont(family=FONT_FAMILY, size=11, weight="bold"),
             fg_color="#d97706",
             hover_color="#b45309",
-            height=34,
-            command=self._handle_trim_ram
-        ).pack(anchor="w", padx=16, pady=(0, 14))
+            height=32,
+            command=self._handle_run_network_doctor
+        )
+        self.btn_doctor.pack(side="left", padx=(0, 8))
+
+        ctk.CTkButton(
+            doc_btn_row,
+            text="🧹 Xóa Sạch DNS Cache",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=11, weight="bold"),
+            fg_color="#059669",
+            hover_color="#047857",
+            height=32,
+            command=self._handle_flush_dns
+        ).pack(side="left", padx=8)
+
+        ctk.CTkButton(
+            doc_btn_row,
+            text="🔄 Khởi Động Lại Card Mạng (2s)",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=11, weight="bold"),
+            fg_color="#0284c7",
+            hover_color="#0369a1",
+            height=32,
+            command=self._handle_restart_nic
+        ).pack(side="left", padx=8)
+
+        # Switch IPv6
+        self.sw_ipv6 = ctk.CTkSwitch(
+            doctor_card,
+            text="Tắt giao thức IPv6 (Ưu tiên truyền tải thuần IPv4 ổn định hơn tại Việt Nam)\n(Giúp giải quyết sự cố phân giải kép chậm hoặc drop mạng khi dùng một số ISP)",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=11, weight="bold"),
+            text_color=COLOR_TEXT_WHITE,
+            progress_color=COLOR_PRIMARY,
+            command=self._handle_toggle_ipv6
+        )
+        self.sw_ipv6.pack(anchor="w", padx=16, pady=(4, 10))
+
+        # Doctor Log Display Box
+        self.lbl_doctor_status = ctk.CTkLabel(
+            doctor_card,
+            text="💡 Hệ thống hoạt động bình thường. Nếu gặp sự cố mạng, bấm 'Bác Sĩ Mạng' để tự động sửa chữa.",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=11),
+            text_color="#38bdf8"
+        )
+        self.lbl_doctor_status.pack(anchor="w", padx=16, pady=(0, 12))
 
         return frame
 
+    # -------------------------------------------------------------
+    # NETWORK LOGIC & EVENT HANDLERS
+    # -------------------------------------------------------------
+    def _refresh_network_telemetry(self):
+        """Đọc và cập nhật các chỉ số card mạng và độ trễ theo thời gian thực."""
+        def worker():
+            adapter_info = get_active_adapter_info()
+            rtt = measure_ping_rtt("1.1.1.1", timeout_sec=2)
+            net_status = get_network_optimization_status()
+
+            def update_ui():
+                # Card mạng
+                conn_type = "Wi-Fi" if adapter_info.get("is_wifi") else "Ethernet"
+                ad_name = adapter_info.get("name", "Card Mạng")
+                ad_desc = adapter_info.get("description", "")
+                short_desc = (ad_desc[:20] + "..") if len(ad_desc) > 20 else (ad_desc or conn_type)
+                self.box_net_adapter.update_value(f"{ad_name}", short_desc)
+
+                # IPv4 & Gateway
+                ipv4 = adapter_info.get("ipv4", "Chưa có IP")
+                self.box_net_ip.update_value(ipv4.split(",")[0].strip(), "IPv4 Cục bộ")
+
+                gw = adapter_info.get("gateway", "Chưa có")
+                self.box_net_gateway.update_value(gw.split(",")[0].strip(), "Default Gateway")
+
+                # Ping RTT
+                if rtt >= 0:
+                    badge_col = COLOR_SUCCESS if rtt < 35 else ("#fbbf24" if rtt < 80 else COLOR_DANGER)
+                    self.box_net_ping.update_value(f"{rtt:.1f} ms", "Độ trễ Internet")
+                    self.box_net_ping.badge_label.configure(text_color=badge_col)
+                else:
+                    self.box_net_ping.update_value("Mất gói", "Không phản hồi")
+                    self.box_net_ping.badge_label.configure(text_color=COLOR_DANGER)
+
+                # DNS hiện tại
+                curr_dns = adapter_info.get("dns", "DHCP (Tự động)")
+                self.lbl_net_dns_current.configure(text=f"🔍 Máy chủ DNS đang kích hoạt: {curr_dns}")
+
+                # Cập nhật trạng thái các Switches
+                if net_status.get("nagle_disabled"):
+                    self.sw_nagle.select()
+                else:
+                    self.sw_nagle.deselect()
+
+                if net_status.get("throttling_disabled"):
+                    self.sw_throttling.select()
+                else:
+                    self.sw_throttling.deselect()
+
+                if net_status.get("qos_limit_removed"):
+                    self.sw_qos.select()
+                else:
+                    self.sw_qos.deselect()
+
+                if net_status.get("dns_cache_optimized"):
+                    self.sw_dns_ttl.select()
+                else:
+                    self.sw_dns_ttl.deselect()
+
+                if net_status.get("dns_leak_protected"):
+                    self.sw_dns_leak.select()
+                else:
+                    self.sw_dns_leak.deselect()
+
+                if net_status.get("ipv6_disabled"):
+                    self.sw_ipv6.select()
+                else:
+                    self.sw_ipv6.deselect()
+
+            self.after(0, update_ui)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _handle_benchmark_dns(self):
+        """Chạy kiểm tra đo tốc độ 10 nhà cung cấp DNS bằng UDP Socket đa luồng."""
+        self.btn_benchmark_dns.configure(state="disabled", text="⏳ Đang đo tốc độ...")
+        self.dns_progress_bar.set(0.0)
+        self.lbl_dns_benchmark_status.configure(text="Đang gửi gói tin UDP Port 53 tới các máy chủ DNS toàn cầu...")
+
+        def progress_cb(completed: int, total: int, provider_name: str):
+            pct = completed / total
+            self.after(0, lambda: self.dns_progress_bar.set(pct))
+            self.after(0, lambda: self.lbl_dns_benchmark_status.configure(
+                text=f"Đang kiểm tra {completed}/{total}: {provider_name}..."
+            ))
+
+        def worker():
+            results = benchmark_all_dns_parallel(progress_callback=progress_cb)
+
+            def on_done():
+                self.btn_benchmark_dns.configure(state="normal", text="🚀 Bắt Đầu Đo Tốc Độ (10 Nhà Cung Cấp)")
+                self.dns_progress_bar.set(1.0)
+
+                if results:
+                    best = results[0]
+                    self.best_dns_provider = best["name"]
+                    self.btn_auto_best_dns.configure(text=f"⚡ Áp Dụng DNS Tốt Nhất ({best['name']} - {best['avg_ms']:.1f}ms)")
+                    self.lbl_dns_benchmark_status.configure(
+                        text=f"✅ Đo hoàn tất! Máy chủ nhanh nhất: {best['name']} ({best['avg_ms']:.1f} ms, Jitter: {best['jitter_ms']:.1f} ms).",
+                        text_color="#34d399"
+                    )
+
+                for r in results:
+                    p_name = r["name"]
+                    if p_name in self.dns_ping_labels:
+                        lbl = self.dns_ping_labels[p_name]
+                        if r["is_online"]:
+                            avg = r["avg_ms"]
+                            col = "#34d399" if avg < 35 else ("#fbbf24" if avg < 80 else "#f87171")
+                            best_tag = " 🏆" if p_name == self.best_dns_provider else ""
+                            lbl.configure(text=f"{avg:.1f} ms{best_tag}", text_color=col)
+                        else:
+                            lbl.configure(text="Offline", text_color="#94a3b8")
+
+                self.log(f"Hoàn thành đo tốc độ DNS. Máy chủ nhanh nhất: {self.best_dns_provider}")
+
+            self.after(0, on_done)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _handle_apply_best_dns(self):
+        """Áp dụng nhà cung cấp DNS có tốc độ nhanh nhất sau khi benchmark."""
+        self._handle_apply_dns(self.best_dns_provider)
+
     def _handle_apply_dns(self, provider: str):
-        self.log(f"Đang cấu hình {provider} DNS...")
+        self.log(f"Đang cấu hình DNS cho card mạng: {provider}...")
         def worker():
             ok, msg = set_primary_dns(provider)
             self.log(msg)
-            self.after(0, lambda: messagebox.showinfo("Cấu Hình DNS", msg) if ok else messagebox.showerror("Lỗi DNS", msg))
+            def on_done():
+                if ok:
+                    messagebox.showinfo("Cấu Hình DNS", msg)
+                else:
+                    messagebox.showerror("Lỗi Cấu Hình DNS", msg)
+                self._refresh_network_telemetry()
+            self.after(0, on_done)
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _handle_apply_custom_dns(self):
+        p = self.entry_dns_primary.get().strip()
+        s = self.entry_dns_secondary.get().strip()
+        if not p:
+            messagebox.showwarning("Cảnh Báo", "Vui lòng nhập ít nhất địa chỉ Primary DNS hợp lệ!")
+            return
+
+        self.log(f"Đang cấu hình DNS tùy chỉnh: {p} / {s}...")
+        def worker():
+            ok, msg = set_custom_dns(p, s, label="DNS Tùy Chỉnh")
+            self.log(msg)
+            def on_done():
+                if ok:
+                    messagebox.showinfo("DNS Tùy Chỉnh", msg)
+                else:
+                    messagebox.showerror("Lỗi", msg)
+                self._refresh_network_telemetry()
+            self.after(0, on_done)
         threading.Thread(target=worker, daemon=True).start()
 
     def _handle_reset_dns(self):
@@ -1801,22 +2334,125 @@ class MainWindow(ctk.CTk):
         def worker():
             ok, msg = reset_dns_to_dhcp()
             self.log(msg)
-            self.after(0, lambda: messagebox.showinfo("Cấu Hình DNS", msg) if ok else messagebox.showerror("Lỗi DNS", msg))
+            def on_done():
+                if ok:
+                    messagebox.showinfo("Khôi Phục DNS", msg)
+                else:
+                    messagebox.showerror("Lỗi", msg)
+                self._refresh_network_telemetry()
+            self.after(0, on_done)
         threading.Thread(target=worker, daemon=True).start()
 
     def _handle_flush_dns(self):
         ok, msg = flush_dns_cache()
         self.log(msg)
         if ok:
-            messagebox.showinfo("DNS Cache", msg)
+            messagebox.showinfo("Xóa DNS Cache", msg)
         else:
             messagebox.showerror("Lỗi", msg)
 
-    def _handle_trim_ram(self):
-        ok, msg = trim_memory_working_sets()
-        self.log(msg)
-        if ok:
-            messagebox.showinfo("Tối Ưu RAM", msg)
-        else:
-            messagebox.showerror("Lỗi", msg)
+    def _handle_apply_tcp_preset(self, preset_name: str):
+        self.log(f"Đang áp dụng TCP/IP Preset '{preset_name}'...")
+        def worker():
+            apply_tcp_global_tuning(preset_name)
+            if preset_name == "gaming":
+                set_nagle_algorithm(True)
+                set_network_throttling(True)
+                set_qos_bandwidth_limit(True)
+                set_dns_cache_ttl_optimization(True)
+                set_dns_leak_protection(True)
+                set_energy_saving_ethernet(True)
+                msg = "Đã áp dụng cấu hình Gaming Siêu Giảm Ping toàn diện!"
+            elif preset_name == "download":
+                set_network_throttling(True)
+                set_qos_bandwidth_limit(True)
+                set_dns_cache_ttl_optimization(True)
+                msg = "Đã áp dụng cấu hình Tải Băng Thông Lớn (Max Throughput)!"
+            else:
+                set_nagle_algorithm(False)
+                set_network_throttling(False)
+                set_qos_bandwidth_limit(False)
+                msg = "Đã khôi phục cài đặt TCP/IP về mặc định của Windows."
+
+            self.log(msg)
+            def on_done():
+                self.lbl_tcp_action_status.configure(text=f"✅ {msg}")
+                messagebox.showinfo("Cấu Hình TCP/IP", msg)
+                self._refresh_network_telemetry()
+            self.after(0, on_done)
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _handle_save_tcp_settings(self):
+        self.btn_save_tcp.configure(state="disabled", text="⏳ Đang lưu cấu hình...")
+        self.lbl_tcp_action_status.configure(text="Đang ghi thông số vào Registry hệ thống...")
+
+        dis_nagle = bool(self.sw_nagle.get())
+        dis_throttle = bool(self.sw_throttling.get())
+        dis_qos = bool(self.sw_qos.get())
+        opt_ttl = bool(self.sw_dns_ttl.get())
+        opt_leak = bool(self.sw_dns_leak.get())
+        dis_eee = bool(self.sw_eee.get())
+
+        def worker():
+            self.log("--- BẮT ĐẦU ÁP DỤNG CẤU HÌNH TCP/IP & MẠNG ---")
+            set_nagle_algorithm(dis_nagle)
+            set_network_throttling(dis_throttle)
+            set_qos_bandwidth_limit(dis_qos)
+            set_dns_cache_ttl_optimization(opt_ttl)
+            set_dns_leak_protection(opt_leak)
+            set_energy_saving_ethernet(dis_eee)
+            self.log("--- HOÀN TẤT GHI CẤU HÌNH TCP/IP VÀO REGISTRY ---")
+
+            def on_done():
+                self.btn_save_tcp.configure(state="normal", text="💾 Lưu Cấu Hình TCP/IP Tinh Chỉnh")
+                self.lbl_tcp_action_status.configure(text="✅ Đã lưu cấu hình mạng thành công!")
+                messagebox.showinfo(
+                    "Cấu Hình Mạng Đã Lưu",
+                    "Các tinh chỉnh TCP/IP, Nagle Algorithm và QoS đã được lưu thành công!\n\n"
+                    "Các ứng dụng và trò chơi mới khởi chạy sẽ tự động áp dụng đường truyền tối ưu hóa."
+                )
+                self._refresh_network_telemetry()
+            self.after(0, on_done)
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _handle_run_network_doctor(self):
+        self.btn_doctor.configure(state="disabled", text="⏳ Bác sĩ đang làm việc...")
+        self.lbl_doctor_status.configure(text="Đang bắt đầu quy trình cấp cứu mạng toàn diện...")
+
+        def log_cb(msg: str):
+            self.log(msg)
+            self.after(0, lambda: self.lbl_doctor_status.configure(text=msg))
+
+        def worker():
+            ok, summary = run_network_doctor(log_callback=log_cb)
+            def on_done():
+                self.btn_doctor.configure(state="normal", text="🩺 Bác Sĩ Mạng (Sửa Tự Động 5 Bước)")
+                self.lbl_doctor_status.configure(text="✅ Hoàn tất cứu hộ mạng! Toàn bộ kết nối đã được làm mới.")
+                messagebox.showinfo("Bác Sĩ Mạng (Network Doctor)", summary)
+                self._refresh_network_telemetry()
+            self.after(0, on_done)
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _handle_restart_nic(self):
+        self.log("Đang khởi động lại card mạng đang hoạt động...")
+        def worker():
+            ok, msg = restart_network_adapter()
+            self.log(msg)
+            def on_done():
+                if ok:
+                    messagebox.showinfo("Card Mạng", msg)
+                else:
+                    messagebox.showwarning("Thông Báo", msg)
+                self._refresh_network_telemetry()
+            self.after(0, on_done)
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _handle_toggle_ipv6(self):
+        dis = bool(self.sw_ipv6.get())
+        def worker():
+            ok, msg = set_ipv6_state(dis)
+            self.log(msg)
+            self.after(0, lambda: messagebox.showinfo("Giao Thức IPv6", msg) if ok else messagebox.showerror("Lỗi", msg))
+        threading.Thread(target=worker, daemon=True).start()
+
 
