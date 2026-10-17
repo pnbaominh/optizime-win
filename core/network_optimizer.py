@@ -3,6 +3,7 @@ import sys
 import socket
 import struct
 import time
+import ipaddress
 import winreg
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Tuple, Dict, Any, List, Optional, Callable
@@ -303,9 +304,22 @@ def set_custom_dns(primary_dns: str, secondary_dns: str = "", label: str = "Tùy
     if not primary_dns:
         return False, "Địa chỉ Primary DNS không được để trống."
 
-    dns_list_str = f"'{primary_dns}'"
+    try:
+        clean_pri = str(ipaddress.ip_address(primary_dns))
+    except ValueError:
+        return False, f"Địa chỉ Primary DNS '{primary_dns}' không phải địa chỉ IP hợp lệ."
+
+    clean_sec = ""
     if secondary_dns:
-        dns_list_str += f", '{secondary_dns}'"
+        try:
+            clean_sec = str(ipaddress.ip_address(secondary_dns))
+        except ValueError:
+            return False, f"Địa chỉ Secondary DNS '{secondary_dns}' không phải địa chỉ IP hợp lệ."
+
+    dns_list = [f"'{clean_pri}'"]
+    if clean_sec:
+        dns_list.append(f"'{clean_sec}'")
+    dns_list_str = ", ".join(dns_list)
 
     ps_code = f"""
     $rt = Get-NetRoute -DestinationPrefix '0.0.0.0/0' -ErrorAction SilentlyContinue | Sort-Object RouteMetric | Select-Object -First 1;
@@ -326,8 +340,8 @@ def set_custom_dns(primary_dns: str, secondary_dns: str = "", label: str = "Tùy
         res = run_cmd(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps_code], timeout=12)
         if res.returncode == 0 and "OK" in res.stdout:
             flush_dns_cache()
-            sec_text = f", {secondary_dns}" if secondary_dns else ""
-            return True, f"Đã áp dụng DNS {label} ({primary_dns}{sec_text}) thành công!"
+            sec_text = f", {clean_sec}" if clean_sec else ""
+            return True, f"Đã áp dụng DNS {label} ({clean_pri}{sec_text}) thành công!"
         return False, f"Không thể thiết lập DNS: {res.stderr.strip() or res.stdout.strip()}"
     except Exception as e:
         return False, f"Lỗi ngoại lệ khi đổi DNS: {e}"
@@ -517,8 +531,14 @@ def apply_tcp_global_tuning(profile: str = "gaming") -> Tuple[bool, str]:
             ["netsh", "int", "tcp", "set", "supplemental", "template=internet", "congestionprovider=default"]
         ]
 
+    failed_cmds = []
     for c in commands:
-        run_cmd(c, timeout=6)
+        res = run_cmd(c, timeout=6)
+        if res.returncode != 0:
+            failed_cmds.append(" ".join(c))
+
+    if failed_cmds:
+        return False, f"Không thể áp dụng toàn bộ thiết lập TCP/IP ({len(failed_cmds)}/{len(commands)} lệnh thất bại). Vui lòng chạy ứng dụng dưới quyền Administrator."
 
     desc = "Profile Gaming Siêu Giảm Ping (Tắt RSC, Bật RSS/ECN)" if profile == "gaming" else (
         "Profile Tải Nhanh Băng Thông Lớn (Bật RSC/RSS/ECN)" if profile == "download" else "Thiết Lập Mặc Định Windows"

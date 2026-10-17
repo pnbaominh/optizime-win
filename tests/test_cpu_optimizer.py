@@ -110,20 +110,40 @@ class TestCpuOptimizer(unittest.TestCase):
     @patch.object(CpuOptimizerService, "is_admin", return_value=True)
     @patch("core.cpu_optimizer.run_cmd")
     def test_core_unparking_lifecycle(self, mock_cmd, mock_admin):
-        mock_cmd.return_value = MagicMock(returncode=0, stdout="")
+        # Mock powercfg query returning OEM initial values (AC: 10%, DC: 20%)
+        def mock_run_fn(cmd, **kwargs):
+            if "/q" in cmd:
+                return MagicMock(
+                    returncode=0,
+                    stdout="Current AC Power Setting Index: 0x0000000a\nCurrent DC Power Setting Index: 0x00000014"
+                )
+            return MagicMock(returncode=0, stdout="")
+
+        mock_cmd.side_effect = mock_run_fn
         res_apply = self.service.apply_tweak("cpu_core_unparking")
         self.assertTrue(res_apply.success)
         self.assertEqual(res_apply.new_state, TweakState.OPTIMIZED)
 
         # Status check
+        mock_cmd.side_effect = None
         mock_cmd.return_value = MagicMock(returncode=0, stdout="Current AC Power Setting Index: 0x00000064")
         self.assertEqual(self.service.get_status("cpu_core_unparking"), TweakState.OPTIMIZED)
 
-        # Revert
-        mock_cmd.return_value = MagicMock(returncode=0, stdout="")
+        # Revert: should restore original OEM values (10 and 20)
+        captured_cmds = []
+        def mock_revert_fn(cmd, **kwargs):
+            captured_cmds.append(cmd)
+            return MagicMock(returncode=0, stdout="")
+
+        mock_cmd.side_effect = mock_revert_fn
         res_revert = self.service.revert_tweak("cpu_core_unparking")
         self.assertTrue(res_revert.success)
         self.assertEqual(res_revert.new_state, TweakState.DEFAULT)
+        # Verify 10 and 20 were passed back
+        ac_cmd = [c for c in captured_cmds if "-setacvalueindex" in c][0]
+        dc_cmd = [c for c in captured_cmds if "-setdcvalueindex" in c][0]
+        self.assertEqual(ac_cmd[-1], "10")
+        self.assertEqual(dc_cmd[-1], "20")
 
     @patch.object(CpuOptimizerService, "is_admin", return_value=True)
     @patch("winreg.CreateKeyEx")

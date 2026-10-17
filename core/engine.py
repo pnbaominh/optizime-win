@@ -44,7 +44,11 @@ class OptimizerEngine:
             return False, f"Không tìm thấy tinh chỉnh ID: {tweak_id}"
         return tweak.revert()
 
-    def apply_all_recommended(self, log_callback: Optional[Callable[[str], None]] = None) -> Tuple[int, int]:
+    def apply_all_recommended(
+        self,
+        log_callback: Optional[Callable[[str], None]] = None,
+        require_restore_point: bool = True
+    ) -> Tuple[int, int]:
         """
         Áp dụng toàn bộ các tinh chỉnh Khuyên Dùng (An toàn 100%).
         Tự động tạo Restore Point trước khi thực hiện.
@@ -60,6 +64,11 @@ class OptimizerEngine:
         log(f"-> {sr_msg}")
 
         recommended = [t for t in self.tweaks if t.is_recommended]
+        if not sr_ok:
+            log(f"[!] CẢNH BÁO AN TOÀN: Không thể tạo Restore Point ({sr_msg}).")
+            if require_restore_point:
+                log("[!] HỦY BỎ: Dừng áp dụng tối ưu hàng loạt để bảo đảm an toàn hệ thống.")
+                return 0, len(recommended)
         success_count = 0
         fail_count = 0
 

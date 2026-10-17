@@ -343,12 +343,23 @@ def full_memory_purge() -> Tuple[bool, str, int]:
     after_info = get_detailed_memory_info()
     total_freed_mb = max(0, int(after_info["avail_mb"] - before_info["avail_mb"]))
 
-    msg = f"Đã hoàn tất Siêu Dọn Dẹp RAM ({count} ứng dụng & Standby Cache)."
-    if total_freed_mb > 0:
-        msg += f" Đã trả lại {total_freed_mb} MB RAM vào vùng nhớ khả dụng!"
-    else:
-        msg += " Bộ nhớ RAM đã ở trạng thái tối ưu nhất."
+    if not trim_ok and not standby_ok:
+        return False, f"Thất bại khi dọn dẹp RAM: {trim_msg} | {standby_msg}", 0
 
+    if trim_ok and standby_ok:
+        msg = f"Đã hoàn tất Siêu Dọn Dẹp RAM ({count} ứng dụng & Standby Cache)."
+        if total_freed_mb > 0:
+            msg += f" Đã trả lại {total_freed_mb} MB RAM vào vùng nhớ khả dụng!"
+        else:
+            msg += " Bộ nhớ RAM đã ở trạng thái tối ưu nhất."
+        return True, msg, total_freed_mb
+
+    # Một trong hai bước hoàn tất
+    succeeded_part = f"{count} ứng dụng" if trim_ok else "Standby Cache"
+    failed_part = standby_msg if not standby_ok else trim_msg
+    msg = f"Dọn dẹp hoàn tất một phần ({succeeded_part} thành công). Cảnh báo: {failed_part}"
+    if total_freed_mb > 0:
+        msg += f" (Đã giải phóng ~{total_freed_mb} MB RAM)"
     return True, msg, total_freed_mb
 
 # -------------------------------------------------------------

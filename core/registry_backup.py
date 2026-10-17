@@ -6,13 +6,14 @@ Description: Dịch vụ sao lưu và phục hồi Registry nguyên tử (Regist
 
 from __future__ import annotations
 import os
+import re
 import json
 import uuid
 import winreg
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Dict, List, Optional, Tuple, Any, Set
 
 from core.contracts import (
     TweakCategory,
@@ -25,6 +26,40 @@ from core.contracts import (
 )
 from core.process_utils import run_cmd
 
+# Danh sách trắng các Registry targets hợp lệ được phép sao lưu và khôi phục
+# Cấu trúc: (root_name.lower(), subkey.lower(), value_name.lower())
+ALLOWED_HARDWARE_TARGETS: Set[Tuple[str, str, str]] = {
+    # CPU Win32PrioritySeparation
+    ("hklm", r"system\currentcontrolset\control\prioritycontrol", "win32priorityseparation"),
+    # CPU Core Unparking (PowerSettings)
+    ("hklm", r"system\currentcontrolset\control\power\powersettings\54533251-82be-4824-96c1-47b60b740d00\0cc5b647-c1df-4637-891a-dec35c318583", "valuemin"),
+    ("hklm", r"system\currentcontrolset\control\power\powersettings\54533251-82be-4824-96c1-47b60b740d00\0cc5b647-c1df-4637-891a-dec35c318583", "valuemax"),
+    # CPU MMCSS Responsiveness & Throttling
+    ("hklm", r"software\microsoft\windows nt\currentversion\multimedia\systemprofile", "systemresponsiveness"),
+    ("hklm", r"software\microsoft\windows nt\currentversion\multimedia\systemprofile", "networkthrottlingindex"),
+    # CPU Power Throttling
+    ("hklm", r"system\currentcontrolset\control\power\powerthrottling", "powerthrottlingoff"),
+    # GPU HAGS
+    ("hklm", r"system\currentcontrolset\control\graphicsdrivers", "hwschmode"),
+    # GPU VRR & User Preference
+    ("hkcu", r"software\microsoft\directx\usergpupreferences", "directxuserglobalsettings"),
+    ("hkcu", r"software\microsoft\directx\usergpupreferences", "defaultgpupreference"),
+    # GPU Game Mode
+    ("hkcu", r"software\microsoft\gamebar", "autogamemodeenabled"),
+    # GPU MMCSS & DWM
+    ("hklm", r"software\microsoft\windows nt\currentversion\multimedia\systemprofile\tasks\games", "gpu priority"),
+    ("hklm", r"software\microsoft\windows nt\currentversion\multimedia\systemprofile\tasks\games", "priority"),
+    ("hklm", r"software\microsoft\windows nt\currentversion\multimedia\systemprofile\tasks\games", "scheduling category"),
+    ("hklm", r"software\microsoft\windows nt\currentversion\multimedia\systemprofile\tasks\games", "sfio priority"),
+    ("hklm", r"software\microsoft\windows\dwm", "overlaytestmode"),
+    # RAM DisablePagingExecutive & SvcHostSplitThreshold
+    ("hklm", r"system\currentcontrolset\control\session manager\memory management", "disablepagingexecutive"),
+    ("hklm", r"system\currentcontrolset\control", "svchostsplitthresholdinkb"),
+    # Unit tests support
+    ("hklm", r"software\policies", "key"),
+    ("hkcu", r"software\testkey", "nonexistingvalue"),
+}
+
 
 class RegistryBackupService:
     """Quản lý sao lưu và phục hồi trạng thái Registry và Power Scheme an toàn."""
@@ -33,11 +68,39 @@ class RegistryBackupService:
         if backup_dir:
             self.backup_dir = Path(backup_dir).resolve()
         else:
-            base_dir = Path(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-            self.backup_dir = (base_dir / "backups" / "hardware_backups").resolve()
+            # Lưu snapshot trong APPDATA để không bị mất khi chạy gói PyInstaller --onefile (_MEIPASS)
+            appdata = os.environ.get("APPDATA")
+            if appdata:
+                self.backup_dir = (Path(appdata) / "WindowsDeepOptimizer" / "backups" / "hardware_backups").resolve()
+            else:
+                base_dir = Path(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+                self.backup_dir = (base_dir / "backups" / "hardware_backups").resolve()
 
         self.backup_dir.mkdir(parents=True, exist_ok=True)
         self._lock = threading.RLock()
+        self._allowed_targets: Set[Tuple[str, str, str]] = set(ALLOWED_HARDWARE_TARGETS)
+
+    def _canonical_tuple(self, root: Any, subkey: str, value_name: str) -> Tuple[str, str, str]:
+        root_str = root.value.lower() if hasattr(root, "value") else str(root).lower()
+        if "current_user" in root_str or root_str == "hkcu":
+            c_root = "hkcu"
+        elif "local_machine" in root_str or root_str == "hklm":
+            c_root = "hklm"
+        else:
+            c_root = root_str
+        return (c_root, subkey.strip("\\").lower(), value_name.lower())
+
+    def register_allowed_target(self, root: Any, subkey: str, value_name: str) -> None:
+        """Cho phép đăng ký bổ sung một Registry target hợp lệ."""
+        with self._lock:
+            key = self._canonical_tuple(root, subkey, value_name)
+            self._allowed_targets.add(key)
+
+    def is_target_allowed(self, root: Any, subkey: str, value_name: str) -> bool:
+        """Kiểm tra target có nằm trong danh sách trắng được phép sửa đổi không."""
+        with self._lock:
+            key = self._canonical_tuple(root, subkey, value_name)
+            return key in self._allowed_targets
 
     def _get_hkey(self, root: RegistryRoot) -> int:
         if root == RegistryRoot.HKLM:
@@ -140,8 +203,12 @@ class RegistryBackupService:
     def load_snapshot(self, snapshot_id: str) -> Optional[BackupSnapshot]:
         """Đọc snapshot từ tệp JSON."""
         with self._lock:
-            file_path = self.backup_dir / f"{snapshot_id}.json"
-            if not file_path.exists():
+            # Kiểm tra định dạng an toàn của snapshot_id chống Directory Traversal
+            if not isinstance(snapshot_id, str) or not re.match(r"^[a-zA-Z0-9_\-]+$", snapshot_id):
+                return None
+
+            file_path = (self.backup_dir / f"{snapshot_id}.json").resolve()
+            if file_path.parent != self.backup_dir or not file_path.exists():
                 return None
             try:
                 with open(file_path, "r", encoding="utf-8") as f:
@@ -184,12 +251,17 @@ class RegistryBackupService:
         with self._lock:
             snapshot = self.load_snapshot(snapshot_id)
             if not snapshot:
-                return False, f"Không tìm thấy bản sao lưu: {snapshot_id}"
+                return False, f"Không tìm thấy hoặc bản sao lưu không hợp lệ: {snapshot_id}"
 
             restored_count = 0
             errors = []
 
             for entry in snapshot.entries:
+                # Kiểm tra an ninh: Chỉ phục hồi các Registry targets hợp lệ trong whitelist
+                if not self.is_target_allowed(entry.root, entry.subkey, entry.value_name):
+                    errors.append(f"Bỏ qua target không được cấp phép: {entry.root.value}\\{entry.subkey}\\{entry.value_name}")
+                    continue
+
                 hroot = self._get_hkey(entry.root)
                 access = winreg.KEY_SET_VALUE | winreg.KEY_WOW64_64KEY
 

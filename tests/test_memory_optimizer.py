@@ -30,5 +30,24 @@ class TestMemoryOptimizer(unittest.TestCase):
         self.assertIn("memory_compression_disabled", status)
         self.assertIn("large_system_cache_app_mode", status)
 
+    def test_full_memory_purge_evaluation(self):
+        from unittest.mock import patch
+        from core.memory_optimizer import full_memory_purge
+
+        # Case 1: Both fail
+        with patch("core.memory_optimizer.trim_all_working_sets", return_value=(False, "Failed trim", 0, 0)), \
+             patch("core.memory_optimizer.purge_standby_list", return_value=(False, "Failed standby", 0)):
+            ok, msg, freed = full_memory_purge()
+            self.assertFalse(ok)
+            self.assertIn("Thất bại", msg)
+
+        # Case 2: Partial success (trim ok, standby failed)
+        with patch("core.memory_optimizer.trim_all_working_sets", return_value=(True, "Trimmed", 15, 50)), \
+             patch("core.memory_optimizer.purge_standby_list", return_value=(False, "Failed standby", 0)):
+            ok, msg, freed = full_memory_purge()
+            self.assertTrue(ok)
+            self.assertIn("hoàn tất một phần", msg)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -42,7 +42,7 @@ def run_cmd(
 
     try:
         return subprocess.run(cmd, timeout=timeout, shell=shell, **kwargs)
-    except Exception:
+    except (UnicodeDecodeError, UnicodeError):
         # Dự phòng nếu lỗi encoding utf-8 thì fallback cp437/mbcs
         if 'encoding' in kwargs:
             kwargs['encoding'] = 'cp437'

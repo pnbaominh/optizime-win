@@ -34,6 +34,7 @@ class GpuOptimizerService:
     def __init__(self, backup_service: Optional[RegistryBackupService] = None):
         self.backup_service = backup_service or RegistryBackupService()
         self._lock = threading.RLock()
+        self._saved_gpu_pref: Optional[RegistryBackupEntry] = None
         self.descriptors: Dict[str, TweakDescriptor] = self._init_descriptors()
 
     def is_admin(self) -> bool:
@@ -239,7 +240,7 @@ class GpuOptimizerService:
     # -------------------------------------------------------------
     # APPLY & REVERT LOGIC
     # -------------------------------------------------------------
-    def apply_tweak(self, tweak_id: str) -> TweakExecutionResult:
+    def apply_tweak(self, tweak_id: str, create_snapshot: bool = True) -> TweakExecutionResult:
         with self._lock:
             if tweak_id not in self.descriptors:
                 return TweakExecutionResult(
@@ -259,7 +260,7 @@ class GpuOptimizerService:
                 )
 
             snapshot_id = None
-            if desc.registry_targets:
+            if create_snapshot and desc.registry_targets:
                 snapshot = self.backup_service.create_snapshot(
                     category=TweakCategory.GPU,
                     targets=list(desc.registry_targets)
@@ -270,7 +271,7 @@ class GpuOptimizerService:
                 if tweak_id == "gpu_vrr":
                     return self._apply_vrr()
                 elif tweak_id == "gpu_high_performance_preference":
-                    return self._apply_high_performance_gpu()
+                    return self._apply_high_performance_gpu(create_snapshot=create_snapshot)
                 else:
                     return self._apply_registry_tweak(desc, snapshot_id)
             except Exception as e:
@@ -389,17 +390,22 @@ class GpuOptimizerService:
                 message=f"Lỗi hoàn tác VRR: {e}"
             )
 
-    def _apply_high_performance_gpu(self) -> TweakExecutionResult:
+    def _apply_high_performance_gpu(self, create_snapshot: bool = True) -> TweakExecutionResult:
         subkey = r"Software\Microsoft\DirectX\UserGpuPreferences"
-        spec = RegistryTargetSpec(
-            root=RegistryRoot.HKCU,
-            subkey=subkey,
-            value_name="DefaultGpuPreference",
-            value_type=RegistryValueType.REG_DWORD,
-            optimized_value=2,
-            default_value=0
-        )
-        self.backup_service.create_snapshot(TweakCategory.GPU, [spec])
+        # Ghi nhận trạng thái Registry ban đầu trước khi sửa
+        prev_entry = self.backup_service.capture_entry(RegistryRoot.HKCU, subkey, "DefaultGpuPreference")
+        self._saved_gpu_pref = prev_entry
+
+        if create_snapshot:
+            spec = RegistryTargetSpec(
+                root=RegistryRoot.HKCU,
+                subkey=subkey,
+                value_name="DefaultGpuPreference",
+                value_type=RegistryValueType.REG_DWORD,
+                optimized_value=2,
+                default_value=0
+            )
+            self.backup_service.create_snapshot(TweakCategory.GPU, [spec])
 
         with winreg.CreateKey(winreg.HKEY_CURRENT_USER, subkey) as key:
             winreg.SetValueEx(key, "DefaultGpuPreference", 0, winreg.REG_DWORD, 2)
@@ -414,16 +420,37 @@ class GpuOptimizerService:
     def _revert_high_performance_gpu(self) -> TweakExecutionResult:
         subkey = r"Software\Microsoft\DirectX\UserGpuPreferences"
         try:
-            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, subkey, 0, winreg.KEY_SET_VALUE) as key:
-                try:
-                    winreg.DeleteValue(key, "DefaultGpuPreference")
-                except FileNotFoundError:
-                    pass
+            prev = self._saved_gpu_pref
+            if not prev:
+                # Tìm trong snapshot gần nhất nếu có
+                snaps = self.backup_service.list_snapshots(TweakCategory.GPU)
+                for s in snaps:
+                    snap_obj = self.backup_service.load_snapshot(s["snapshot_id"])
+                    if snap_obj:
+                        for e in snap_obj.entries:
+                            if e.root == RegistryRoot.HKCU and e.value_name == "DefaultGpuPreference":
+                                prev = e
+                                break
+                    if prev:
+                        break
+
+            if prev and prev.existed_before and prev.previous_value is not None:
+                with winreg.CreateKey(winreg.HKEY_CURRENT_USER, subkey) as key:
+                    winreg.SetValueEx(key, "DefaultGpuPreference", 0, prev.value_type, prev.previous_value)
+                msg = f"Đã khôi phục lựa chọn GPU trước đó ({prev.previous_value})."
+            else:
+                with winreg.OpenKey(winreg.HKEY_CURRENT_USER, subkey, 0, winreg.KEY_SET_VALUE) as key:
+                    try:
+                        winreg.DeleteValue(key, "DefaultGpuPreference")
+                    except FileNotFoundError:
+                        pass
+                msg = "Đã khôi phục lựa chọn GPU mặc định của Windows."
+
             return TweakExecutionResult(
                 tweak_id="gpu_high_performance_preference",
                 success=True,
                 new_state=TweakState.DEFAULT,
-                message="Đã khôi phục lựa chọn GPU mặc định của Windows."
+                message=msg
             )
         except Exception as e:
             return TweakExecutionResult(
@@ -500,7 +527,7 @@ class GpuOptimizerService:
 
             results = {}
             for tid in self.descriptors:
-                results[tid] = self.apply_tweak(tid)
+                results[tid] = self.apply_tweak(tid, create_snapshot=False)
             return results
 
     def revert_all(self) -> Dict[str, TweakExecutionResult]:

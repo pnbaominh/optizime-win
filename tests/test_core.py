@@ -64,6 +64,39 @@ class TestCoreModules(unittest.TestCase):
         state = tweak.check()
         self.assertIsInstance(state, bool)
 
+    def test_process_utils_timeout_not_retried(self):
+        import subprocess
+        from unittest.mock import patch
+        from core.process_utils import run_cmd
+        with patch("subprocess.run", side_effect=subprocess.TimeoutExpired(cmd=["sleep"], timeout=1)):
+            with self.assertRaises(subprocess.TimeoutExpired):
+                run_cmd(["sleep"], timeout=1)
+
+    def test_create_system_restore_point_sanitization(self):
+        from unittest.mock import patch, MagicMock
+        from core.safety import create_system_restore_point
+        with patch("core.safety.run_cmd") as mock_cmd:
+            mock_cmd.return_value = MagicMock(returncode=0)
+            ok, msg = create_system_restore_point("Malicious'; Remove-Item C:\\ -Recurse #")
+            self.assertTrue(ok)
+            # Ensure dangerous characters (quotes, semicolons, backslashes) are sanitized to underscores
+            called_cmd = mock_cmd.call_args[0][0]
+            ps_str = called_cmd[-1]
+            self.assertNotIn("';", ps_str)
+            self.assertNotIn(" -Recurse", ps_str)
+            self.assertIn("Malicious___", ps_str)
+
+    def test_engine_apply_all_aborts_when_restore_point_fails(self):
+        from unittest.mock import patch
+        from core.engine import OptimizerEngine
+        engine = OptimizerEngine()
+        with patch("core.engine.create_system_restore_point", return_value=(False, "Failed to create restore point")):
+            s_count, f_count = engine.apply_all_recommended(require_restore_point=True)
+            # Must abort: 0 success
+            self.assertEqual(s_count, 0)
+            self.assertGreater(f_count, 0)
+
+
 if __name__ == "__main__":
     unittest.main()
 

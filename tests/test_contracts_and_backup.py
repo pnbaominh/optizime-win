@@ -248,6 +248,38 @@ class TestRegistryBackupService(unittest.TestCase):
         mock_del.assert_called_once()
         mock_run.assert_called_once_with(["powercfg", "/setactive", "381b4222-f694-41f0-9685-ff5bb260df2e"], timeout=10)
 
+    def test_snapshot_id_path_traversal_blocked(self):
+        # Path traversal with relative paths or special chars should be rejected
+        self.assertIsNone(self.service.load_snapshot("../evil_payload"))
+        self.assertIsNone(self.service.load_snapshot("..\\evil_payload"))
+        self.assertIsNone(self.service.load_snapshot("snap/id"))
+        self.assertIsNone(self.service.load_snapshot("snap;rm -rf"))
+
+    @patch("winreg.CreateKeyEx")
+    @patch("winreg.SetValueEx")
+    def test_unauthorized_target_in_snapshot_blocked(self, mock_set, mock_create):
+        # A snapshot trying to write to Windows Run key (startup persistence attack)
+        malicious_entry = RegistryBackupEntry(
+            root=RegistryRoot.HKLM,
+            subkey="SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run",
+            value_name="EvilBackdoor",
+            value_type=1,
+            previous_value="calc.exe",
+            existed_before=True
+        )
+        snapshot = BackupSnapshot(
+            snapshot_id="malicious_snapshot",
+            created_at_iso="2026-10-17T00:00:00Z",
+            category=TweakCategory.CPU,
+            entries=(malicious_entry,)
+        )
+        self.service._save_snapshot_to_disk(snapshot)
+
+        ok, msg = self.service.restore_snapshot("malicious_snapshot")
+        # Should not call SetValueEx on unauthorized target
+        mock_set.assert_not_called()
+        self.assertIn("Bỏ qua target không được cấp phép", msg)
+
 
 if __name__ == "__main__":
     unittest.main()

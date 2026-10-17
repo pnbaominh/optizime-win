@@ -128,6 +128,35 @@ class TestGpuOptimizer(unittest.TestCase):
                 self.assertEqual(res_revert.new_state, TweakState.DEFAULT)
                 mock_del.assert_called_once()
 
+    @patch("winreg.CreateKey")
+    @patch("winreg.SetValueEx")
+    def test_high_performance_gpu_preference_restores_prior_value(self, mock_set, mock_create):
+        from core.contracts import RegistryBackupEntry, RegistryRoot
+        mock_create.return_value.__enter__.return_value = MagicMock()
+
+        # Giả lập người dùng trước đó đã chọn GPU tiết kiệm điện (value = 1)
+        prior_entry = RegistryBackupEntry(
+            root=RegistryRoot.HKCU,
+            subkey="Software\\Microsoft\\DirectX\\UserGpuPreferences",
+            value_name="DefaultGpuPreference",
+            value_type=winreg.REG_DWORD,
+            previous_value=1,
+            existed_before=True
+        )
+        self.service._saved_gpu_pref = prior_entry
+
+        res_revert = self.service.revert_tweak("gpu_high_performance_preference")
+        self.assertTrue(res_revert.success)
+        self.assertEqual(res_revert.new_state, TweakState.DEFAULT)
+        # Kiểm tra giá trị cũ 1 đã được ghi lại thay vì bị xóa
+        mock_set.assert_called_with(
+            mock_create.return_value.__enter__.return_value,
+            "DefaultGpuPreference",
+            0,
+            winreg.REG_DWORD,
+            1
+        )
+
     @patch.object(GpuOptimizerService, "is_admin", return_value=True)
     @patch("winreg.CreateKeyEx")
     @patch("winreg.CreateKey")

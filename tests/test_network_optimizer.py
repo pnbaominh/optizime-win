@@ -88,5 +88,26 @@ class TestNetworkOptimizer(unittest.TestCase):
             for i in range(len(online_items) - 1):
                 self.assertLessEqual(online_items[i]["avg_ms"], online_items[i + 1]["avg_ms"])
 
+    def test_set_custom_dns_rejects_malicious_inputs(self):
+        from core.network_optimizer import set_custom_dns
+        # Injection payload attempts
+        ok, msg = set_custom_dns("8.8.8.8'); Start-Process calc.exe; #")
+        self.assertFalse(ok)
+        self.assertIn("không phải địa chỉ IP hợp lệ", msg)
+
+        ok, msg = set_custom_dns("1.1.1.1", "1.0.0.1; Remove-Item C:\\ -Recurse")
+        self.assertFalse(ok)
+        self.assertIn("không phải địa chỉ IP hợp lệ", msg)
+
+    def test_set_tcp_congestion_profile_checks_errors(self):
+        from unittest.mock import patch, MagicMock
+        from core.network_optimizer import apply_tcp_global_tuning
+        with patch("core.network_optimizer.run_cmd") as mock_cmd:
+            mock_cmd.return_value = MagicMock(returncode=1)
+            ok, msg = apply_tcp_global_tuning("gaming")
+            self.assertFalse(ok)
+            self.assertIn("thất bại", msg)
+
+
 if __name__ == "__main__":
     unittest.main()

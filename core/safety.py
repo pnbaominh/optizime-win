@@ -1,6 +1,8 @@
 import os
+import re
 import json
 import winreg
+import subprocess
 from datetime import datetime
 from core.process_utils import run_cmd
 
@@ -38,9 +40,14 @@ def create_system_restore_point(description: str = "Before_Optimization") -> tup
     except Exception:
         pass
 
+    # Lọc bỏ các ký tự đặc biệt nguy hiểm để chống PowerShell injection
+    safe_desc = re.sub(r"[^a-zA-Z0-9_\-]", "_", str(description).strip())[:30]
+    if not safe_desc:
+        safe_desc = "Optimization"
+
     # Tạo điểm khôi phục bằng PowerShell
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    full_desc = f"WDO_{description}_{timestamp}"
+    full_desc = f"WDO_{safe_desc}_{timestamp}"
     
     ps_cmd = f"Checkpoint-Computer -Description '{full_desc}' -RestorePointType 'MODIFY_SETTINGS' -ErrorAction Stop"
     cmd = ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps_cmd]

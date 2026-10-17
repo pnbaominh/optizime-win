@@ -1533,17 +1533,45 @@ class MainWindow(ctk.CTk):
 
             def on_done():
                 self.btn_apply_boot_mem.configure(state="normal", text="💾 Áp Dụng Cấu Hình RAM Khởi Động")
-                self.lbl_boot_mem_result.configure(text="✅ Đã lưu cấu hình thành công!", text_color="#34d399")
-                msg_body = (
-                    "Đã lưu các cấu hình tối ưu hóa RAM khi khởi động thành công!\n\n"
-                    "Dự kiến sau khi bạn Khởi động lại máy (Restart):\n"
-                    "• Windows sẽ không tự nạp trước hàng gigabyte tệp vào RAM.\n"
-                    "• Tiến trình System sẽ giảm đáng kể dung lượng chiếm dụng.\n"
-                    "• Kernel và Drivers được giữ cố định trong bộ nhớ RAM vật lý.\n"
-                    "• Tiến trình SvcHost được gom/tách tối ưu theo dung lượng RAM.\n\n"
-                    "Bạn có thể khởi động lại máy tính khi thuận tiện để trải nghiệm lượng RAM được giải phóng."
-                )
-                messagebox.showinfo("Cấu Hình Boot Đã Lưu", msg_body)
+                ok_list = [ok1, ok2, ok3, ok4, ok5]
+                success_count = sum(1 for x in ok_list if x)
+                total_count = len(ok_list)
+
+                if success_count == total_count:
+                    self.lbl_boot_mem_result.configure(
+                        text=f"✅ Đã lưu toàn bộ cấu hình thành công! ({success_count}/{total_count})",
+                        text_color="#34d399"
+                    )
+                    msg_body = (
+                        "Đã lưu các cấu hình tối ưu hóa RAM khi khởi động thành công!\n\n"
+                        "Dự kiến sau khi bạn Khởi động lại máy (Restart):\n"
+                        "• Windows sẽ không tự nạp trước hàng gigabyte tệp vào RAM.\n"
+                        "• Tiến trình System sẽ giảm đáng kể dung lượng chiếm dụng.\n"
+                        "• Kernel và Drivers được giữ cố định trong bộ nhớ RAM vật lý.\n"
+                        "• Tiến trình SvcHost được gom/tách tối ưu theo dung lượng RAM.\n\n"
+                        "Bạn có thể khởi động lại máy tính khi thuận tiện để trải nghiệm lượng RAM được giải phóng."
+                    )
+                    messagebox.showinfo("Cấu Hình Boot Đã Lưu", msg_body)
+                elif success_count > 0:
+                    self.lbl_boot_mem_result.configure(
+                        text=f"⚠️ Đã lưu cấu hình một phần ({success_count}/{total_count})",
+                        text_color="#f59e0b"
+                    )
+                    messagebox.showwarning(
+                        "Cấu Hình Một Phần",
+                        f"Đã lưu thành công {success_count}/{total_count} thiết lập RAM.\n"
+                        f"Có {total_count - success_count} thiết lập gặp lỗi hoặc bị từ chối quyền.\n"
+                        "Vui lòng xem chi tiết tại tab Nhật Ký."
+                    )
+                else:
+                    self.lbl_boot_mem_result.configure(
+                        text="❌ Lưu cấu hình RAM thất bại!",
+                        text_color="#ef4444"
+                    )
+                    messagebox.showerror(
+                        "Lỗi Cấu Hình RAM",
+                        "Không thể lưu các thiết lập RAM khởi động. Vui lòng chạy ứng dụng dưới quyền Administrator."
+                    )
                 self._refresh_memory_view()
 
             self.after(0, on_done)
@@ -1648,9 +1676,18 @@ class MainWindow(ctk.CTk):
             return
 
         def worker():
-            self.engine.apply_all_recommended(log_callback=self.log)
+            s_count, f_count = self.engine.apply_all_recommended(log_callback=self.log)
             self.after(0, self._refresh_all_cards)
-            self.after(0, lambda: messagebox.showinfo("Hoàn Tất", "Đã hoàn thành tối ưu hóa hệ thống an toàn!"))
+            if s_count > 0:
+                self.after(0, lambda: messagebox.showinfo(
+                    "Hoàn Tất",
+                    f"Đã hoàn thành tối ưu hóa an toàn ({s_count} thành công, {f_count} thất bại)!"
+                ))
+            else:
+                self.after(0, lambda: messagebox.showwarning(
+                    "Không Thể Tối Ưu",
+                    "Quá trình tối ưu đã bị hủy do không thể tạo System Restore Point để đảm bảo an toàn hệ thống."
+                ))
 
         threading.Thread(target=worker, daemon=True).start()
 

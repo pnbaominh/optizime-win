@@ -41,6 +41,7 @@ class CpuOptimizerService:
     def __init__(self, backup_service: Optional[RegistryBackupService] = None):
         self.backup_service = backup_service or RegistryBackupService()
         self._lock = threading.RLock()
+        self._saved_cpmincores: Optional[Tuple[int, int]] = None
         self.descriptors: Dict[str, TweakDescriptor] = self._init_descriptors()
 
     def is_admin(self) -> bool:
@@ -199,6 +200,23 @@ class CpuOptimizerService:
             pass
         return TweakState.DEFAULT
 
+    def _get_current_cpmincores(self) -> Tuple[Optional[int], Optional[int]]:
+        """Đọc chỉ số CPMINCORES hiện tại (AC, DC) từ powercfg query."""
+        try:
+            res = run_cmd(
+                ["powercfg", "/q", "SCHEME_CURRENT", SUB_PROCESSOR_GUID, CPMINCORES_SETTING_GUID],
+                timeout=5
+            )
+            if res.returncode == 0:
+                m_ac = re.search(r"Current AC Power Setting Index:\s*0x([0-9a-fA-F]+)", res.stdout)
+                m_dc = re.search(r"Current DC Power Setting Index:\s*0x([0-9a-fA-F]+)", res.stdout)
+                ac_val = int(m_ac.group(1), 16) if m_ac else None
+                dc_val = int(m_dc.group(1), 16) if m_dc else None
+                return ac_val, dc_val
+        except Exception:
+            pass
+        return None, None
+
     def _check_registry_tweak(self, descriptor: TweakDescriptor) -> TweakState:
         if not descriptor.registry_targets:
             return TweakState.DEFAULT
@@ -222,7 +240,7 @@ class CpuOptimizerService:
     # -------------------------------------------------------------
     # APPLY & REVERT LOGIC
     # -------------------------------------------------------------
-    def apply_tweak(self, tweak_id: str) -> TweakExecutionResult:
+    def apply_tweak(self, tweak_id: str, create_snapshot: bool = True) -> TweakExecutionResult:
         with self._lock:
             if tweak_id not in self.descriptors:
                 return TweakExecutionResult(
@@ -241,9 +259,9 @@ class CpuOptimizerService:
                     message="Thao tác yêu cầu quyền Quản trị viên (Run as Administrator)."
                 )
 
-            # Sao lưu Registry targets trước khi ghi
+            # Sao lưu Registry targets trước khi ghi (nếu không chạy ở chế độ batch)
             snapshot_id = None
-            if desc.registry_targets:
+            if create_snapshot and desc.registry_targets:
                 snapshot = self.backup_service.create_snapshot(
                     category=TweakCategory.CPU,
                     targets=list(desc.registry_targets)
@@ -252,7 +270,7 @@ class CpuOptimizerService:
 
             try:
                 if tweak_id == "cpu_ultimate_power_plan":
-                    return self._apply_ultimate_power_plan()
+                    return self._apply_ultimate_power_plan(create_snapshot=create_snapshot)
                 elif tweak_id == "cpu_core_unparking":
                     return self._apply_core_unparking()
                 else:
@@ -303,15 +321,16 @@ class CpuOptimizerService:
     # -------------------------------------------------------------
     # SPECIFIC APPLY/REVERT IMPLEMENTATIONS
     # -------------------------------------------------------------
-    def _apply_ultimate_power_plan(self) -> TweakExecutionResult:
+    def _apply_ultimate_power_plan(self, create_snapshot: bool = True) -> TweakExecutionResult:
         active_before = self._get_active_power_scheme_guid()
 
-        # Sao lưu scheme hiện tại
-        self.backup_service.create_snapshot(
-            category=TweakCategory.CPU,
-            targets=[],
-            power_scheme_guid_before=active_before
-        )
+        # Sao lưu scheme hiện tại nếu được yêu cầu
+        if create_snapshot:
+            self.backup_service.create_snapshot(
+                category=TweakCategory.CPU,
+                targets=[],
+                power_scheme_guid_before=active_before
+            )
 
         # Kiểm tra xem Ultimate Scheme đã tồn tại trong danh sách powercfg chưa
         target_guid = None
@@ -381,6 +400,14 @@ class CpuOptimizerService:
         )
 
     def _apply_core_unparking(self) -> TweakExecutionResult:
+        # Ghi nhận giá trị CPMINCORES ban đầu của người dùng/OEM trước khi áp dụng
+        ac_before, dc_before = self._get_current_cpmincores()
+        if ac_before is not None or dc_before is not None:
+            self._saved_cpmincores = (
+                ac_before if ac_before is not None else 5,
+                dc_before if dc_before is not None else 5
+            )
+
         # Đặt CPMINCORES = 100% cho cả cắm sạc (AC) và pin (DC)
         cmd_ac = [
             "powercfg", "-setacvalueindex", "SCHEME_CURRENT",
@@ -411,14 +438,19 @@ class CpuOptimizerService:
         )
 
     def _revert_core_unparking(self) -> TweakExecutionResult:
-        # Khôi phục CPMINCORES về mặc định 5%
+        # Khôi phục CPMINCORES về giá trị ban đầu đã lưu (mặc định fallback là 5%)
+        ac_val = 5
+        dc_val = 5
+        if self._saved_cpmincores:
+            ac_val, dc_val = self._saved_cpmincores
+
         cmd_ac = [
             "powercfg", "-setacvalueindex", "SCHEME_CURRENT",
-            SUB_PROCESSOR_GUID, CPMINCORES_SETTING_GUID, "5"
+            SUB_PROCESSOR_GUID, CPMINCORES_SETTING_GUID, str(ac_val)
         ]
         cmd_dc = [
             "powercfg", "-setdcvalueindex", "SCHEME_CURRENT",
-            SUB_PROCESSOR_GUID, CPMINCORES_SETTING_GUID, "5"
+            SUB_PROCESSOR_GUID, CPMINCORES_SETTING_GUID, str(dc_val)
         ]
         cmd_act = ["powercfg", "-setactive", "SCHEME_CURRENT"]
 
@@ -431,7 +463,7 @@ class CpuOptimizerService:
                 tweak_id="cpu_core_unparking",
                 success=True,
                 new_state=TweakState.DEFAULT,
-                message="Đã khôi phục trạng thái Core Parking mặc định của Windows (5%)."
+                message=f"Đã khôi phục trạng thái Core Parking ban đầu (AC: {ac_val}%, DC: {dc_val}%)."
             )
         return TweakExecutionResult(
             tweak_id="cpu_core_unparking",
@@ -504,7 +536,7 @@ class CpuOptimizerService:
 
             results = {}
             for tid in self.descriptors:
-                results[tid] = self.apply_tweak(tid)
+                results[tid] = self.apply_tweak(tid, create_snapshot=False)
             return results
 
     def revert_all(self) -> Dict[str, TweakExecutionResult]:
