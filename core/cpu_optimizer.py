@@ -96,6 +96,28 @@ class CpuOptimizerService:
             ),
         )
 
+        specs_network_throttling = (
+            RegistryTargetSpec(
+                root=RegistryRoot.HKLM,
+                subkey="SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile",
+                value_name="NetworkThrottlingIndex",
+                value_type=RegistryValueType.REG_DWORD,
+                optimized_value=0xFFFFFFFF,  # Vô hiệu hóa giới hạn bóp nghẹt 10 gói tin/ms của Windows
+                default_value=10
+            ),
+        )
+
+        specs_energy_estimation = (
+            RegistryTargetSpec(
+                root=RegistryRoot.HKLM,
+                subkey="SYSTEM\\CurrentControlSet\\Control\\Power",
+                value_name="EnergyEstimationDisabled",
+                value_type=RegistryValueType.REG_DWORD,
+                optimized_value=1,  # Tắt tiến trình nền liên tục đánh thức CPU tính toán năng lượng app
+                default_value=0
+            ),
+        )
+
         desc_list = [
             TweakDescriptor(
                 tweak_id="cpu_ultimate_power_plan",
@@ -150,6 +172,24 @@ class CpuOptimizerService:
                 requires_admin=True,
                 requires_reboot=False,
                 registry_targets=specs_timer
+            ),
+            TweakDescriptor(
+                tweak_id="cpu_network_throttling_index",
+                category=TweakCategory.CPU,
+                title="Gỡ Bỏ Điều Tiết Gói Tin Mạng MMCSS (NetworkThrottlingIndex)",
+                description="Vô hiệu hóa giới hạn 10 gói tin/ms của Windows khi có âm thanh/media, giảm DPC latency và ổn định ping khi chơi game.",
+                requires_admin=True,
+                requires_reboot=False,
+                registry_targets=specs_network_throttling
+            ),
+            TweakDescriptor(
+                tweak_id="cpu_disable_energy_estimation",
+                category=TweakCategory.CPU,
+                title="Tắt Thu Thập Năng Lượng Ngầm CPU (Energy Estimation)",
+                description="Ngăn Windows liên tục thức CPU dậy để tính toán điện năng từng ứng dụng, giảm ngắt context switch và ổn định xung nhịp.",
+                requires_admin=True,
+                requires_reboot=False,
+                registry_targets=specs_energy_estimation
             ),
         ]
 

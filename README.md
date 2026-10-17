@@ -22,25 +22,29 @@
 - **Quản Lý Ứng Dụng Khởi Động (Startup Manager):** Kiểm tra và tắt các phần mềm tự chạy ngầm cùng Windows để tăng tốc độ bật máy.
 - **Tối Ưu Mạng & DNS Tốc Độ Cao:** Xóa bộ đệm DNS (`ipconfig /flushdns`) ẩn và chuyển đổi nhanh sang Cloudflare DNS (1.1.1.1) hoặc Google DNS (8.8.8.8).
 - **Quyền Riêng Tư (Privacy):** Tắt Telemetry chẩn đoán ngầm, tắt tìm kiếm Bing web trong Start Menu, tắt Advertising ID, tắt Activity History.
-- **Dịch Vụ Hệ Thống (Services - Chống BSOD & Treo Máy 100% - v1.2.4):** Nghiên cứu chuyên sâu và vô hiệu hóa an toàn 20 dịch vụ chạy ngầm thừa thãi gây tốn CPU / RAM / I/O:
-  - *Chẩn đoán & Thu thập Telemetry:* `DiagTrack` (Connected User Experiences), `dmwappushservice` (WAP Push Message), `DPS` (Diagnostic Policy Service - ngăn chặn quét lỗi làm giật khung hình khi chơi game), `WerSvc` (Windows Error Reporting - chống giật lag crash dump), `wisvc` (Windows Insider Service - chặn tải ngầm bản Windows beta).
-  - *Mạng & Chia sẻ thừa thãi:* `MapsBroker` (Bản đồ ngoại tuyến), `SharedAccess` (Chia sẻ kết nối Internet ICS), `TrkWks` (Distributed Link Tracking Client - chặn quét link phân tán NTFS vô ích), `lltdsvc` (Link-Layer Topology Discovery - tắt broadcast sơ đồ mạng cũ), `NetTcpPortSharing` (Net.Tcp Port Sharing - cổng WCF doanh nghiệp không dùng).
-  - *Thiết bị ngoại vi không dùng & Thẻ thông minh:* `SCardSvr` (Smart Card), `ScDeviceEnum` (Smart Card Device Enumeration), `SCPolicySvc` (Smart Card Removal Policy - tắt chính sách khóa máy thẻ từ doanh nghiệp), `PhoneSvc` (Phone Service - ngưng thăm dò SIM điện thoại trên PC/Laptop thường), `SEMgrSvc` (Payments and NFC/SE Manager - tắt quản lý chạm NFC không cần thiết), `WalletService` (Microsoft Wallet).
+- **Dịch Vụ Hệ Thống (Services - Chống BSOD & Treo Máy 100% - v1.2.5):** Nghiên cứu chuyên sâu và vô hiệu hóa an toàn 20 dịch vụ chạy ngầm thừa thãi gây tốn CPU / RAM / I/O:
+  - *Chẩn đoán & Thu thập Telemetry:* `DiagTrack` (Connected User Experiences), `dmwappushservice` (WAP Push Message), `WerSvc` (Windows Error Reporting - chống giật lag crash dump), `wisvc` (Windows Insider Service - chặn tải ngầm bản Windows beta).
+  - *Mạng & Chia sẻ thừa thãi:* `MapsBroker` (Bản đồ ngoại tuyến), `SharedAccess` (Chia sẻ kết nối Internet ICS), `RemoteAccess` (Routing and Remote Access - tắt định tuyến quay số VPN cổ), `lltdsvc` (Link-Layer Topology Discovery - tắt broadcast sơ đồ mạng cũ), `NetTcpPortSharing` (Net.Tcp Port Sharing - cổng WCF doanh nghiệp không dùng).
+  - *Thiết bị ngoại vi không dùng & Thẻ thông minh:* `SensorService` (Sensor Monitoring Service - tắt dịch vụ cảm biến xoay màn hình tablet/Surface thừa thãi trên PC/Laptop), `SCardSvr` (Smart Card), `ScDeviceEnum` (Smart Card Device Enumeration), `SCPolicySvc` (Smart Card Removal Policy - tắt chính sách khóa máy thẻ từ doanh nghiệp), `PhoneSvc` (Phone Service - ngưng thăm dò SIM điện thoại trên PC/Laptop thường), `SEMgrSvc` (Payments and NFC/SE Manager - tắt quản lý chạm NFC không cần thiết), `WalletService` (Microsoft Wallet).
   - *Trải nghiệm bán lẻ & Giám sát:* `RetailDemo` (Dịch vụ trình diễn tại cửa hàng), `RemoteRegistry` (Chỉnh sửa Registry từ xa qua mạng), `lfsvc` (Geolocation Service - chống ping spike do quét vị trí Wi-Fi), `WpcMonSvc` (Parental Controls - Kiểm soát phụ huynh).
-  - *Tác vụ lên lịch ngầm (Scheduled Task):* `Microsoft\Windows\Application Experience\Microsoft Compatibility Appraiser` (chặn quét tương thích phần cứng ngầm).
+  - *Tác vụ lên lịch ngầm (Scheduled Task):* `Microsoft\Windows\Application Experience\Microsoft Compatibility Appraiser` (chặn đứng `CompatTelRunner.exe` qua Registry Group Policy chính thức: `DisableInventory = 1`, `AITEnable = 0`).
   - *Cam kết bảo vệ sống còn (Zero-Brick Guarantee):* Tuyệt đối không can thiệp và bảo vệ 100% các dịch vụ thiết yếu: Chống gian lận Valorant (`vgc`, `vgk`), Âm thanh (`AudioSrv`), Mạng Internet (`WlanSvc`, `Dhcp`, `Dnscache`), Driver Đồ Họa / Card kép Laptop Optimus (`nvlddmkm`, `igfxcuiservice`), Bluetooth, và Kernel Windows (`RpcSs`, `DWM`).
 - **Hiệu Năng & Gaming (Performance):** Giảm `MenuShowDelay` về 20ms, tắt Xbox Game DVR background recording, tối ưu TCP Auto-Tuning Stack.
 - **Dọn Rác & Bloatware (Clean):** Dọn dẹp an toàn thư mục tạm `%TEMP%` và `Windows\Temp`, dọn dẹp Component Store WinSxS bằng DISM, gỡ bỏ an toàn các ứng dụng rác cài sẵn.
 
-### 4. ⚡ Siêu Tối Ưu Phần Cứng CPU, GPU & RAM (v1.2.4)
-- **🚀 6 Tinh Chỉnh Vi Xử Lý (CPU Optimizer):**
+### 4. ⚡ Siêu Tối Ưu Phần Cứng CPU, GPU & RAM (v1.2.5 - 15 Tinh Chỉnh Chuyên Sâu)
+- **🚀 8 Tinh Chỉnh Vi Xử Lý (CPU Optimizer):**
   - **Độ Phân Giải Bộ Định Thời Kernel (Global Timer 1ms):** Ép Windows kernel cấp quyền timer 1ms/0.5ms chính xác cao, loại bỏ triệt để micro-stutter và giảm input lag chuột khi chơi Valorant / CS2.
   - **Ultimate Performance Power Plan:** Kích hoạt và chuyển sang cấu hình nguồn Ultimate Performance, loại bỏ hoàn toàn độ trễ hạ xung CPU.
   - **Win32PrioritySeparation (Foreground Boost):** Thiết lập `0x26`, ưu tiên 100% chu kỳ xung nhịp CPU cho cửa sổ ứng dụng và game đang sử dụng.
   - **CPU Core Unparking (100%):** Mở khóa toàn bộ nhân CPU (`CPMINCORES = 100`), giữ mọi nhân luôn sẵn sàng không bị ngủ ngắt quãng.
   - **MMCSS System Responsiveness:** Tối ưu hóa phân bổ 90% tài nguyên CPU cho các tác vụ đa phương tiện và gaming thời gian thực.
   - **Tắt Điều Tiết Xung Nhịp (Disable Power Throttling):** Ngăn Windows tự ý bóp nghẹt xung nhịp khi đang chạy nặng.
-- **🎮 5 Tinh Chỉnh Đồ Họa (GPU Optimizer - Chuyên Biệt Esports & Safe MPO):**
+  - **Gỡ Bỏ Điều Tiết Gói Tin Mạng MMCSS (NetworkThrottlingIndex):** Thiết lập `0xFFFFFFFF`, gỡ bỏ giới hạn 10 gói tin/ms của Windows khi có âm thanh/media, giảm DPC latency và ổn định ping game.
+  - **Tắt Thu Thập Năng Lượng Ngầm CPU (Energy Estimation):** Ngăn Windows liên tục thức CPU dậy để tính toán điện năng từng ứng dụng, giảm ngắt context switch và ổn định xung nhịp.
+- **🎮 7 Tinh Chỉnh Đồ Họa (GPU Optimizer - Chuyên Biệt Esports & Safe MPO):**
+  - **Chống Văng Game & Phục Hồi Driver Đồ Họa (TdrDelay 8s):** Nâng ngưỡng chờ phản hồi GPU từ 2 giây lên 8 giây theo chuẩn Microsoft Hardware Dev Center, chống crash game và chống nháy đen màn hình khi tải nặng hoặc Alt-Tab.
+  - **Tối Ưu Lập Lịch Luồng Đồ Họa DirectX (Game Clock Rate & Affinity):** Thiết lập xung nhịp lấy mẫu 10000 và Affinity = 0, giải phóng luồng render DirectX trên toàn bộ nhân CPU thay vì dồn vào Core 0.
   - **Tắt Windows GameDVR & Ép True Fullscreen:** Vô hiệu hóa triệt để tính năng quay video ngầm (GameDVR, AppCapture) của Windows và tối ưu chế độ FSE, loại bỏ giật lag, hiện tượng nhấp nháy đen và drop FPS khi chơi Valorant.
   - **Lập Lịch Luồng GPU & Giảm Input Lag (Safe MPO):** Thiết lập GPU Priority = 8, Priority = 6, SFIO Priority = High trong Multimedia SystemProfile cho Games nhưng giữ nguyên Multi-Plane Overlay (MPO), an toàn 100% cho màn hình và laptop chạy card kép (Optimus Intel/AMD + NVIDIA).
   - **Lập Lịch Tăng Tốc Phần Cứng GPU (HAGS):** Cung cấp tùy chọn HwSchMode kèm cảnh báo an toàn cho laptop Optimus.
@@ -104,13 +108,13 @@ optizime win/
 ├── core/
 │   ├── contracts.py           # Strict Data Contracts, Enums & Runtime Validators
 │   ├── registry_backup.py     # Dịch vụ sao lưu & phục hồi Registry nguyên tử (JSON Snapshots)
-│   ├── cpu_optimizer.py       # Bộ 5 tinh chỉnh vi xử lý CPU chuyên sâu
-│   ├── gpu_optimizer.py       # Bộ 5 tinh chỉnh đồ họa GPU chuyên sâu
+│   ├── cpu_optimizer.py       # Bộ 8 tinh chỉnh vi xử lý CPU chuyên sâu
+│   ├── gpu_optimizer.py       # Bộ 7 tinh chỉnh đồ họa GPU chuyên sâu
 │   ├── ram_optimizer.py       # DisablePagingExecutive, SvcHostSplit, AutoStandbyPurgeWorker
 │   ├── memory_optimizer.py    # Thu gọn Working Sets & Standby List NT Native API
 │   ├── network_optimizer.py   # Xóa DNS cache & cấu hình Cloudflare/Google DNS
 │   ├── process_utils.py       # Chạy tiến trình ẩn 100%, ngăn chặn hiện tab CMD
-│   ├── version.py             # Định nghĩa phiên bản tập trung (v1.2.4)
+│   ├── version.py             # Định nghĩa phiên bản tập trung (v1.2.5)
 │   ├── updater.py             # Kiểm tra cập nhật GitHub Releases & tải installer
 │   ├── startup_manager.py     # Quản lý ứng dụng khởi động cùng Windows
 │   ├── safety.py              # System Restore Point & Registry Backup
@@ -129,8 +133,8 @@ optizime win/
 │   └── main_window.py         # Giao diện chính 11 tab & Auto-update
 ├── tests/
 │   ├── test_contracts_and_backup.py      # Unit tests cho contracts & backup service
-│   ├── test_cpu_optimizer.py             # Unit tests cho 5 tinh chỉnh CPU
-│   ├── test_gpu_optimizer.py             # Unit tests cho 5 tinh chỉnh GPU
+│   ├── test_cpu_optimizer.py             # Unit tests cho 8 tinh chỉnh CPU
+│   ├── test_gpu_optimizer.py             # Unit tests cho 7 tinh chỉnh GPU
 │   ├── test_ram_optimizer_upgrade.py     # Unit tests cho nâng cấp RAM & daemon worker
 │   ├── test_services_safety.py           # Unit tests kiểm định 20 services an toàn chống BSOD
 │   ├── test_integration_workflow.py     # Integration tests & Zero-Disk Constraint audit

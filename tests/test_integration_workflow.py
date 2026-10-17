@@ -55,13 +55,13 @@ class TestIntegrationWorkflow(unittest.TestCase):
 
         # 1. Quick Apply CPU
         cpu_results = self.cpu_service.quick_apply_all()
-        self.assertEqual(len(cpu_results), 6)
+        self.assertEqual(len(cpu_results), 8)
         for tid, res in cpu_results.items():
             self.assertTrue(res.success, f"CPU tweak {tid} failed: {res.message}")
 
         # 2. Quick Apply GPU
         gpu_results = self.gpu_service.quick_apply_all()
-        self.assertEqual(len(gpu_results), 5)
+        self.assertEqual(len(gpu_results), 7)
         for tid, res in gpu_results.items():
             self.assertTrue(res.success, f"GPU tweak {tid} failed: {res.message}")
 

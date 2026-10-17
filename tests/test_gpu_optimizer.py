@@ -23,13 +23,15 @@ class TestGpuOptimizer(unittest.TestCase):
 
     def test_descriptors_integrity(self):
         descriptors = self.service.get_descriptors()
-        self.assertEqual(len(descriptors), 5)
+        self.assertEqual(len(descriptors), 7)
         ids = [d.tweak_id for d in descriptors]
         self.assertIn("gpu_hags", ids)
         self.assertIn("gpu_disable_gamedvr", ids)
         self.assertIn("gpu_game_mode", ids)
         self.assertIn("gpu_priority_dwm_flush", ids)
         self.assertIn("gpu_high_performance_preference", ids)
+        self.assertIn("gpu_tdr_delay", ids)
+        self.assertIn("gpu_directx_thread_affinity", ids)
         for d in descriptors:
             self.assertEqual(d.category, TweakCategory.GPU)
 
@@ -160,7 +162,7 @@ class TestGpuOptimizer(unittest.TestCase):
         mock_create_ex.return_value.__enter__.return_value = MagicMock()
 
         results_apply = self.service.quick_apply_all()
-        self.assertEqual(len(results_apply), 5)
+        self.assertEqual(len(results_apply), 7)
         for res in results_apply.values():
             self.assertTrue(res.success)
 
@@ -168,7 +170,7 @@ class TestGpuOptimizer(unittest.TestCase):
             mock_open.return_value.__enter__.return_value = MagicMock()
             with patch("winreg.DeleteValue"):
                 results_revert = self.service.revert_all()
-                self.assertEqual(len(results_revert), 5)
+                self.assertEqual(len(results_revert), 7)
                 for res in results_revert.values():
                     self.assertTrue(res.success)
 

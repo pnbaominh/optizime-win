@@ -202,6 +202,52 @@ class GpuOptimizerService:
             ),
         )
 
+        specs_tdr = (
+            RegistryTargetSpec(
+                root=RegistryRoot.HKLM,
+                subkey="SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers",
+                value_name="TdrDelay",
+                value_type=RegistryValueType.REG_DWORD,
+                optimized_value=8,  # Chờ 8 giây trước khi reset GPU, chống văng game/nháy đen
+                default_value=2
+            ),
+            RegistryTargetSpec(
+                root=RegistryRoot.HKLM,
+                subkey="SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers",
+                value_name="TdrDdiDelay",
+                value_type=RegistryValueType.REG_DWORD,
+                optimized_value=8,
+                default_value=5
+            ),
+        )
+
+        specs_directx_affinity = (
+            RegistryTargetSpec(
+                root=RegistryRoot.HKLM,
+                subkey="SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Games",
+                value_name="Clock Rate",
+                value_type=RegistryValueType.REG_DWORD,
+                optimized_value=10000,
+                default_value=2710
+            ),
+            RegistryTargetSpec(
+                root=RegistryRoot.HKLM,
+                subkey="SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Games",
+                value_name="Affinity",
+                value_type=RegistryValueType.REG_DWORD,
+                optimized_value=0,  # Giải phóng luồng đồ họa trên toàn bộ nhân CPU, không dồn Core 0
+                default_value=0
+            ),
+            RegistryTargetSpec(
+                root=RegistryRoot.HKLM,
+                subkey="SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Games",
+                value_name="Background Only",
+                value_type=RegistryValueType.REG_SZ,
+                optimized_value="False",
+                default_value="False"
+            ),
+        )
+
         desc_list = [
             TweakDescriptor(
                 tweak_id="gpu_hags",
@@ -247,6 +293,24 @@ class GpuOptimizerService:
                 requires_admin=False,
                 requires_reboot=False,
                 registry_targets=()
+            ),
+            TweakDescriptor(
+                tweak_id="gpu_tdr_delay",
+                category=TweakCategory.GPU,
+                title="Chống Văng Game & Phục Hồi Driver Đồ Họa (TdrDelay 8s)",
+                description="Nâng ngưỡng chờ phản hồi GPU từ 2 giây lên 8 giây theo chuẩn Microsoft, chống crash game và chống nháy đen màn hình khi tải nặng hoặc Alt-Tab.",
+                requires_admin=True,
+                requires_reboot=False,
+                registry_targets=specs_tdr
+            ),
+            TweakDescriptor(
+                tweak_id="gpu_directx_thread_affinity",
+                category=TweakCategory.GPU,
+                title="Tối Ưu Lập Lịch Luồng Đồ Họa DirectX (Game Clock Rate & Affinity)",
+                description="Thiết lập xung nhịp lấy mẫu 10000 và Affinity = 0, giải phóng luồng render DirectX trên toàn bộ nhân CPU thay vì dồn vào Core 0.",
+                requires_admin=True,
+                requires_reboot=False,
+                registry_targets=specs_directx_affinity
             ),
         ]
 

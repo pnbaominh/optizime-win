@@ -37,12 +37,15 @@ ALLOWED_HARDWARE_TARGETS: Set[Tuple[str, str, str]] = {
     # CPU MMCSS Responsiveness & Throttling
     ("hklm", r"software\microsoft\windows nt\currentversion\multimedia\systemprofile", "systemresponsiveness"),
     ("hklm", r"software\microsoft\windows nt\currentversion\multimedia\systemprofile", "networkthrottlingindex"),
-    # CPU Power Throttling
+    # CPU Power Throttling & Energy Estimation
     ("hklm", r"system\currentcontrolset\control\power\powerthrottling", "powerthrottlingoff"),
+    ("hklm", r"system\currentcontrolset\control\power", "energyestimationdisabled"),
     # CPU Global Timer Resolution (Valorant micro-stutter fix)
     ("hklm", r"system\currentcontrolset\control\session manager\kernel", "globaltimerresolutionrequests"),
-    # GPU HAGS
+    # GPU HAGS & TDR Delay (Anti-crash / Anti-flicker)
     ("hklm", r"system\currentcontrolset\control\graphicsdrivers", "hwschmode"),
+    ("hklm", r"system\currentcontrolset\control\graphicsdrivers", "tdrdelay"),
+    ("hklm", r"system\currentcontrolset\control\graphicsdrivers", "tdrddidelay"),
     # GPU GameDVR / FSE (Valorant stutter fix replacing VRR)
     ("hkcu", r"system\gameconfigstore", "gamedvr_enabled"),
     ("hkcu", r"system\gameconfigstore", "gamedvr_fsebehaviormode"),
@@ -62,6 +65,9 @@ ALLOWED_HARDWARE_TARGETS: Set[Tuple[str, str, str]] = {
     ("hklm", r"software\microsoft\windows nt\currentversion\multimedia\systemprofile\tasks\games", "priority"),
     ("hklm", r"software\microsoft\windows nt\currentversion\multimedia\systemprofile\tasks\games", "scheduling category"),
     ("hklm", r"software\microsoft\windows nt\currentversion\multimedia\systemprofile\tasks\games", "sfio priority"),
+    ("hklm", r"software\microsoft\windows nt\currentversion\multimedia\systemprofile\tasks\games", "clock rate"),
+    ("hklm", r"software\microsoft\windows nt\currentversion\multimedia\systemprofile\tasks\games", "affinity"),
+    ("hklm", r"software\microsoft\windows nt\currentversion\multimedia\systemprofile\tasks\games", "background only"),
     ("hklm", r"software\microsoft\windows\dwm", "overlaytestmode"),
     # RAM DisablePagingExecutive & SvcHostSplitThreshold
     ("hklm", r"system\currentcontrolset\control\session manager\memory management", "disablepagingexecutive"),

@@ -91,11 +91,13 @@ class TestServicesSafety(unittest.TestCase):
         )
 
     @patch("winreg.OpenKey")
+    @patch("winreg.CreateKeyEx")
     @patch("winreg.SetValueEx")
     @patch("winreg.QueryValueEx", return_value=(3, winreg.REG_DWORD))
     @patch("core.services.run_cmd")
-    def test_all_services_apply_and_revert_lifecycle(self, mock_cmd, mock_query, mock_set, mock_open):
+    def test_all_services_apply_and_revert_lifecycle(self, mock_cmd, mock_query, mock_set, mock_create, mock_open):
         mock_open.return_value.__enter__.return_value = MagicMock()
+        mock_create.return_value.__enter__.return_value = MagicMock()
         mock_cmd.return_value = MagicMock(returncode=0, stdout="SUCCESS")
 
         tweaks = get_services_tweaks()

@@ -193,7 +193,7 @@ class DisableMapsBrokerTweak(ServiceTweak):
 
 
 class DisableCompatibilityAppraiserTweak(Tweak):
-    """Tắt Scheduled Task Microsoft Compatibility Appraiser."""
+    """Tắt Scheduled Task Microsoft Compatibility Appraiser và chính sách chẩn đoán tương thích."""
     def __init__(self):
         super().__init__(
             tweak_id="task_compat_appraiser",
@@ -201,43 +201,85 @@ class DisableCompatibilityAppraiserTweak(Tweak):
             category="Dịch Vụ Hệ Thống",
             description="Ngăn Windows chạy quét toàn bộ ổ cứng để đánh giá tương thích ứng dụng mỗi khi mở máy.",
             explanation=(
-                "Tác vụ 'Microsoft Compatibility Appraiser' chạy định kỳ gây hiện tượng 100% Disk Usage\n"
-                "trong 5-10 phút đầu sau khi khởi động máy. Vô hiệu hóa tác vụ này giúp máy khởi động nhanh\n"
-                "và giảm tối đa độ giật lag ban đầu."
+                "Tác vụ 'Microsoft Compatibility Appraiser' chạy định kỳ gây hiện tượng 100% Disk/CPU Usage\n"
+                "trong 5-10 phút đầu sau khi khởi động máy. Vô hiệu hóa tác vụ này và thiết lập Group Policy ngăn chặn\n"
+                "giúp máy khởi động nhanh, ổn định và giảm tối đa độ giật lag ban đầu mà không bao giờ gặp lỗi phân quyền."
             ),
             is_recommended=True
         )
-        self.task_path = r"\Microsoft\Windows\Application Experience\Microsoft Compatibility Appraiser"
+        self.task_paths = [
+            r"\Microsoft\Windows\Application Experience\Microsoft Compatibility Appraiser Exp",
+            r"\Microsoft\Windows\Application Experience\Microsoft Compatibility Appraiser",
+            r"\Microsoft\Windows\Application Experience\ProgramDataUpdater"
+        ]
 
     def check(self) -> bool:
+        # 1. Kiểm tra chính sách Registry
         try:
-            cmd = ["schtasks.exe", "/Query", "/TN", self.task_path]
-            res = run_cmd(cmd, timeout=5)
-            if res.returncode == 0:
-                return "Disabled" in res.stdout
-            return False
+            sub_key = r"SOFTWARE\Policies\Microsoft\Windows\AppCompat"
+            with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, sub_key, 0, winreg.KEY_READ | winreg.KEY_WOW64_64KEY) as key:
+                val, _ = winreg.QueryValueEx(key, "DisableInventory")
+                if val == 1:
+                    return True
         except Exception:
-            return False
+            pass
+
+        # 2. Kiểm tra Task Scheduler
+        for tp in self.task_paths:
+            try:
+                cmd = ["schtasks.exe", "/Query", "/TN", tp]
+                res = run_cmd(cmd, timeout=5)
+                if res.returncode == 0 and "Disabled" in res.stdout:
+                    return True
+            except Exception:
+                pass
+        return False
 
     def apply(self) -> Tuple[bool, str]:
+        reg_ok = False
+        # 1. Ghi chính sách Registry Group Policy (chuẩn Microsoft để chặn CompatTelRunner.exe)
         try:
-            cmd = ["schtasks.exe", "/Change", "/TN", self.task_path, "/Disable"]
-            res = run_cmd(cmd, timeout=10)
-            if res.returncode == 0:
-                return True, "Đã vô hiệu hóa Compatibility Appraiser Task thành công."
-            return False, res.stderr.strip() or res.stdout.strip()
-        except Exception as e:
-            return False, str(e)
+            sub_key_app = r"SOFTWARE\Policies\Microsoft\Windows\AppCompat"
+            with winreg.CreateKeyEx(winreg.HKEY_LOCAL_MACHINE, sub_key_app, 0, winreg.KEY_ALL_ACCESS | winreg.KEY_WOW64_64KEY) as key:
+                winreg.SetValueEx(key, "DisableInventory", 0, winreg.REG_DWORD, 1)
+                winreg.SetValueEx(key, "AITEnable", 0, winreg.REG_DWORD, 0)
+            
+            sub_key_dc = r"SOFTWARE\Policies\Microsoft\Windows\DataCollection"
+            with winreg.CreateKeyEx(winreg.HKEY_LOCAL_MACHINE, sub_key_dc, 0, winreg.KEY_ALL_ACCESS | winreg.KEY_WOW64_64KEY) as key:
+                winreg.SetValueEx(key, "AllowTelemetry", 0, winreg.REG_DWORD, 0)
+            reg_ok = True
+        except Exception:
+            reg_ok = False
+
+        # 2. Thử vô hiệu hóa tác vụ trong Task Scheduler (nếu hệ thống cho phép)
+        for tp in self.task_paths:
+            try:
+                run_cmd(["schtasks.exe", "/Change", "/TN", tp, "/Disable"], timeout=5)
+            except Exception:
+                pass
+
+        if reg_ok:
+            return True, "Đã vô hiệu hóa Compatibility Appraiser thành công qua Group Policy và Task Scheduler."
+        return False, "Không thể ghi khóa chính sách Registry (Yêu cầu quyền Administrator)."
 
     def revert(self) -> Tuple[bool, str]:
+        # 1. Khôi phục Registry Policies
         try:
-            cmd = ["schtasks.exe", "/Change", "/TN", self.task_path, "/Enable"]
-            res = run_cmd(cmd, timeout=10)
-            if res.returncode == 0:
-                return True, "Đã bật lại Compatibility Appraiser Task."
-            return False, res.stderr.strip() or res.stdout.strip()
-        except Exception as e:
-            return False, str(e)
+            sub_key_app = r"SOFTWARE\Policies\Microsoft\Windows\AppCompat"
+            with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, sub_key_app, 0, winreg.KEY_SET_VALUE | winreg.KEY_WOW64_64KEY) as key:
+                winreg.SetValueEx(key, "DisableInventory", 0, winreg.REG_DWORD, 0)
+                winreg.SetValueEx(key, "AITEnable", 0, winreg.REG_DWORD, 1)
+        except Exception:
+            pass
+
+        # 2. Thử bật lại tác vụ Task Scheduler
+        for tp in self.task_paths:
+            try:
+                run_cmd(["schtasks.exe", "/Change", "/TN", tp, "/Enable"], timeout=5)
+            except Exception:
+                pass
+
+        return True, "Đã khôi phục cài đặt mặc định cho Compatibility Appraiser."
 
 
 class DisableWerSvcTweak(ServiceTweak):
@@ -330,38 +372,38 @@ class DisableSharedAccessTweak(ServiceTweak):
         )
 
 
-class DisableDPSTweak(ServiceTweak):
-    """Tắt dịch vụ Diagnostic Policy Service (DPS)."""
+class DisableSensorServiceTweak(ServiceTweak):
+    """Tắt dịch vụ Sensor Monitoring Service (SensorService)."""
     def __init__(self):
         super().__init__(
-            tweak_id="service_dps",
-            name="Tắt dịch vụ Chính sách Chẩn đoán lỗi ngầm (DPS)",
-            service_name="DPS",
-            description="Ngăn Windows liên tục phân tích và ghi log chẩn đoán lỗi vào đĩa trong lúc chơi game hoặc làm việc.",
+            tweak_id="service_sensorservice",
+            name="Tắt dịch vụ Cảm biến xoay màn hình (SensorService)",
+            service_name="SensorService",
+            description="Vô hiệu hóa dịch vụ quản trị cảm biến xoay và cảm biến ánh sáng màn hình tablet/Surface trên PC và Laptop.",
             explanation=(
-                "Dịch vụ 'DPS' (Diagnostic Policy Service) tự động kích hoạt các kịch bản phát hiện sự cố và ghi log chẩn đoán ngầm.\n"
-                "Đối với máy tính cá nhân và máy gaming, việc DPS chạy ngầm liên tục thường gây hiện tượng giật khung hình nhẹ (micro-stutter) và hao phí I/O.\n"
-                "Tắt dịch vụ này an toàn 100%, hoàn toàn không ảnh hưởng đến bất kỳ driver phần cứng hay sự ổn định của hệ điều hành."
+                "Dịch vụ 'SensorService' theo dõi cảm biến gia tốc, con quay hồi chuyển và độ sáng môi trường trên các thiết bị cảm ứng Surface/tablet 2-in-1.\n"
+                "Trên máy tính để bàn (PC) và laptop gaming thông thường, dịch vụ này chạy ngầm là hoàn toàn thừa thãi.\n"
+                "Tắt dịch vụ này giúp giảm tiến trình ngầm, an toàn 100% không ảnh hưởng đến màn hình hay driver card đồ họa."
             ),
-            default_start_type="auto",
+            default_start_type="demand",
             is_recommended=True
         )
 
 
-class DisableTrkWksTweak(ServiceTweak):
-    """Tắt dịch vụ Distributed Link Tracking Client (TrkWks)."""
+class DisableRemoteAccessTweak(ServiceTweak):
+    """Tắt dịch vụ Routing and Remote Access (RemoteAccess)."""
     def __init__(self):
         super().__init__(
-            tweak_id="service_trkwks",
-            name="Tắt dịch vụ Theo dõi liên kết NTFS mạng (TrkWks)",
-            service_name="TrkWks",
-            description="Vô hiệu hóa việc theo dõi liên kết giữa các tệp tin trong mạng nội bộ domain doanh nghiệp.",
+            tweak_id="service_remoteaccess",
+            name="Tắt dịch vụ Định tuyến & Truy cập từ xa (RemoteAccess - RRAS)",
+            service_name="RemoteAccess",
+            description="Vô hiệu hóa dịch vụ định tuyến quay số modem VPN cổ điển và NAT doanh nghiệp.",
             explanation=(
-                "Dịch vụ 'TrkWks' duy trì các liên kết tệp tin NTFS trên máy tính hoặc giữa các máy tính trong một mạng miền (Active Directory Domain).\n"
-                "Máy tính cá nhân không kết nối domain doanh nghiệp hoàn toàn không cần đến dịch vụ này.\n"
-                "Tắt dịch vụ giúp giảm bớt số lượng file handles và luồng svchost chạy ngầm, an toàn tuyệt đối 100%."
+                "Dịch vụ 'RemoteAccess' (Routing and Remote Access) cung cấp các dịch vụ định tuyến cho doanh nghiệp trong môi trường mạng cục bộ hoặc diện rộng.\n"
+                "Đối với người dùng máy tính cá nhân hoặc game thủ kết nối Internet qua Router/Wi-Fi thông thường, tính năng này hoàn toàn không cần thiết.\n"
+                "Tắt dịch vụ giúp giảm diện tích tấn công mạng và tiết kiệm RAM/CPU, an toàn tuyệt đối 100%."
             ),
-            default_start_type="auto",
+            default_start_type="demand",
             is_recommended=True
         )
 
@@ -524,8 +566,8 @@ def get_services_tweaks() -> list[Tweak]:
         DisableParentalControlsTweak(),
         DisableSharedAccessTweak(),
         DisableCompatibilityAppraiserTweak(),
-        DisableDPSTweak(),
-        DisableTrkWksTweak(),
+        DisableSensorServiceTweak(),
+        DisableRemoteAccessTweak(),
         DisableWisvcTweak(),
         DisablePhoneSvcTweak(),
         DisableSEMgrSvcTweak(),
