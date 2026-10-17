@@ -1,6 +1,6 @@
 import customtkinter as ctk
 from tkinter import messagebox
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from ui.theme import (
     COLOR_BG_DARK, COLOR_CARD_BG, COLOR_BORDER,
     COLOR_PRIMARY, COLOR_PRIMARY_HOVER, COLOR_SUCCESS, COLOR_SUCCESS_HOVER,
@@ -9,8 +9,27 @@ from ui.theme import (
 from core.updater import download_and_install_update
 
 class UpdateDialog(ctk.CTkToplevel):
+    _active_instance: Optional["UpdateDialog"] = None
+
+    def __new__(cls, parent, update_info: Dict[str, Any]):
+        if cls._active_instance is not None:
+            try:
+                if cls._active_instance.winfo_exists():
+                    cls._active_instance.lift()
+                    cls._active_instance.focus_force()
+                    return cls._active_instance
+            except Exception:
+                cls._active_instance = None
+        instance = super().__new__(cls)
+        return instance
+
     def __init__(self, parent, update_info: Dict[str, Any]):
+        if getattr(self, "_initialized", False):
+            return
         super().__init__(parent)
+        self._initialized = True
+        self._parent = parent
+        UpdateDialog._active_instance = self
         self.update_info = update_info
 
         self.title("Bản Cập Nhật Mới - Windows Deep Optimizer")
@@ -22,7 +41,19 @@ class UpdateDialog(ctk.CTkToplevel):
         self.transient(parent)
         self.grab_set()
 
+        self.protocol("WM_DELETE_WINDOW", self.destroy)
         self._init_ui()
+
+    def destroy(self):
+        UpdateDialog._active_instance = None
+        if hasattr(self, "_parent") and hasattr(self._parent, "_update_dialog"):
+            if getattr(self._parent, "_update_dialog", None) is self:
+                self._parent._update_dialog = None
+        try:
+            self.grab_release()
+        except Exception:
+            pass
+        super().destroy()
 
     def _init_ui(self):
         # 1. Header Box (Top)

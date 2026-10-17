@@ -3,7 +3,7 @@
 """
 
 APP_NAME = "Windows Deep Optimizer"
-APP_VERSION = "1.2.1"
+APP_VERSION = "1.2.2"
 REPO_OWNER = "pnbaominh"
 REPO_NAME = "optizime-win"
 GITHUB_LATEST_RELEASE_URL = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/releases/latest"

@@ -2,6 +2,7 @@ import os
 import sys
 import threading
 from datetime import datetime
+from typing import Optional, Dict, Any
 import customtkinter as ctk
 from tkinter import messagebox
 
@@ -91,6 +92,12 @@ class MainWindow(ctk.CTk):
         self.cpu_service = CpuOptimizerService(self.registry_backup)
         self.gpu_service = GpuOptimizerService(self.registry_backup)
         self.auto_purge_worker = get_auto_purge_worker()
+
+        # Quản lý cập nhật phiên bản (tránh race condition và mở 2 bảng trùng lặp)
+        self.btn_sidebar_update: Optional[ctk.CTkButton] = None
+        self._update_dialog: Optional[Any] = None
+        self._is_checking_updates: bool = False
+        self._silent_update_after_id: Optional[str] = None
 
         # Cấu hình cửa sổ
         self.title(f"{APP_NAME} v{APP_VERSION} - Tối Ưu Hóa Windows Chuyên Sâu")
@@ -226,7 +233,7 @@ class MainWindow(ctk.CTk):
         )
         ver_lbl.pack(anchor="w", pady=(0, 4))
 
-        update_btn = ctk.CTkButton(
+        self.btn_sidebar_update = ctk.CTkButton(
             footer,
             text="🔄 Kiểm tra cập nhật",
             font=ctk.CTkFont(family=FONT_FAMILY, size=11, weight="bold"),
@@ -237,7 +244,7 @@ class MainWindow(ctk.CTk):
             corner_radius=6,
             command=self._check_for_updates_manually
         )
-        update_btn.pack(fill="x")
+        self.btn_sidebar_update.pack(fill="x")
 
         # Navigation Scrollable Area (between sys_card and footer)
         nav_container = ctk.CTkScrollableFrame(self.sidebar, fg_color="transparent")
@@ -1594,6 +1601,12 @@ class MainWindow(ctk.CTk):
 
     def _on_close_window(self):
         try:
+            if hasattr(self, "_silent_update_after_id") and self._silent_update_after_id:
+                self.after_cancel(self._silent_update_after_id)
+                self._silent_update_after_id = None
+        except Exception:
+            pass
+        try:
             if hasattr(self, "auto_purge_worker"):
                 self.auto_purge_worker.stop()
         except Exception:
@@ -1709,33 +1722,103 @@ class MainWindow(ctk.CTk):
     # -------------------------------------------------------------
     # AUTO-UPDATE METHODS
     # -------------------------------------------------------------
+    def _show_update_dialog(self, update_info: Dict[str, Any]):
+        """Hiển thị hộp thoại cập nhật duy nhất (singleton), ngăn ngừa mở trùng lặp."""
+        if self._silent_update_after_id is not None:
+            try:
+                self.after_cancel(self._silent_update_after_id)
+            except Exception:
+                pass
+            self._silent_update_after_id = None
+
+        if self._update_dialog is not None:
+            try:
+                if self._update_dialog.winfo_exists():
+                    self._update_dialog.lift()
+                    self._update_dialog.focus_force()
+                    return
+            except Exception:
+                self._update_dialog = None
+
+        self._update_dialog = UpdateDialog(self, update_info)
+
     def _check_for_updates_silently(self):
         try:
             update_info = UpdateChecker.check_for_updates()
             if update_info and update_info.get("has_update"):
-                self.after(1500, lambda: UpdateDialog(self, update_info))
+                def show_silent():
+                    self._silent_update_after_id = None
+                    if not self._is_checking_updates:
+                        self._show_update_dialog(update_info)
+                self._silent_update_after_id = self.after(1500, show_silent)
         except Exception:
             pass
 
     def _check_for_updates_manually(self):
+        # Tránh người dùng bấm nhiều lần hoặc double-click
+        if self._is_checking_updates:
+            return
+
+        # Nếu hộp thoại cập nhật đang mở, chỉ cần đưa lên trên cùng
+        if self._update_dialog is not None:
+            try:
+                if self._update_dialog.winfo_exists():
+                    self._update_dialog.lift()
+                    self._update_dialog.focus_force()
+                    return
+            except Exception:
+                self._update_dialog = None
+
+        # Hủy timer của silent check nếu đang chờ
+        if self._silent_update_after_id is not None:
+            try:
+                self.after_cancel(self._silent_update_after_id)
+            except Exception:
+                pass
+            self._silent_update_after_id = None
+
+        self._is_checking_updates = True
+        if self.btn_sidebar_update is not None:
+            try:
+                self.btn_sidebar_update.configure(state="disabled", text="⏳ Đang kiểm tra...")
+            except Exception:
+                pass
+
         self.log("Đang kiểm tra bản cập nhật mới từ GitHub...")
+
         def worker():
-            update_info = UpdateChecker.check_for_updates()
-            if update_info and update_info.get("has_update"):
-                self.after(0, lambda: UpdateDialog(self, update_info))
-            elif update_info and update_info.get("status") == "not_found":
-                err_msg = update_info.get("error", "Chưa tìm thấy bản phát hành trên GitHub.")
-                self.log(f"[!] {err_msg}")
-                self.after(0, lambda: messagebox.showwarning("Thông Báo Cập Nhật", err_msg))
-            elif update_info and update_info.get("status") in ("http_error", "network_error"):
-                err_msg = update_info.get("error", "Lỗi kết nối GitHub.")
-                self.log(f"[!] {err_msg}")
-                self.after(0, lambda: messagebox.showerror("Lỗi Cập Nhật", err_msg))
-            else:
-                self.after(0, lambda: messagebox.showinfo(
-                    "Kiểm Tra Cập Nhật",
-                    f"Bạn đang sử dụng phiên bản mới nhất (v{APP_VERSION})!\nKhông có bản cập nhật mới nào."
-                ))
+            try:
+                update_info = UpdateChecker.check_for_updates()
+            except Exception as e:
+                update_info = {"has_update": False, "status": "network_error", "error": str(e)}
+
+            def on_done():
+                self._is_checking_updates = False
+                if self.btn_sidebar_update is not None:
+                    try:
+                        if self.btn_sidebar_update.winfo_exists():
+                            self.btn_sidebar_update.configure(state="normal", text="🔄 Kiểm tra cập nhật")
+                    except Exception:
+                        pass
+
+                if update_info and update_info.get("has_update"):
+                    self._show_update_dialog(update_info)
+                elif update_info and update_info.get("status") == "not_found":
+                    err_msg = update_info.get("error", "Chưa tìm thấy bản phát hành trên GitHub.")
+                    self.log(f"[!] {err_msg}")
+                    messagebox.showwarning("Thông Báo Cập Nhật", err_msg)
+                elif update_info and update_info.get("status") in ("http_error", "network_error"):
+                    err_msg = update_info.get("error", "Lỗi kết nối GitHub.")
+                    self.log(f"[!] {err_msg}")
+                    messagebox.showerror("Lỗi Cập Nhật", err_msg)
+                else:
+                    messagebox.showinfo(
+                        "Kiểm Tra Cập Nhật",
+                        f"Bạn đang sử dụng phiên bản mới nhất (v{APP_VERSION})!\nKhông có bản cập nhật mới nào."
+                    )
+
+            self.after(0, on_done)
+
         threading.Thread(target=worker, daemon=True).start()
 
     # -------------------------------------------------------------
