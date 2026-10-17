@@ -16,21 +16,23 @@ from core.services import (
 CRITICAL_SYSTEM_SERVICES_BLACKLIST = {
     # Vanguard Anti-Cheat & EasyAntiCheat
     "vgc", "vgk", "easyanticheat", "battleye",
-    # Display & GPU
-    "nvlddmkm", "nvdisplay.containerlocalroot", "nvcontainerlocalsystem", "igfxcuiservice", "amdfendrsr",
+    # Display & GPU (NVIDIA, Intel, AMD)
+    "nvlddmkm", "nvdisplay.containerlocalroot", "nvcontainerlocalsystem", "igfxcuiservice", "amdfendrsr", "cphs",
     # Audio
     "audiosrv", "audioendpointbuilder",
     # Core Network & Internet
     "wlansvc", "dhcp", "dnscache", "nlasvc", "netprofm", "lanmanworkstation", "lanmanserver",
-    # Windows Core Kernel / Boot
-    "rpcss", "dcomlaunch", "rpcendpointmapper", "plugplay", "lsm", "samss", "winlogon"
+    # Bluetooth & Peripherals
+    "bthserv", "bthhfenum", "hidserv", "kbdclass", "mouclass",
+    # Windows Core Kernel / Boot / Authentication
+    "rpcss", "dcomlaunch", "rpcendpointmapper", "plugplay", "lsm", "samss", "winlogon", "power", "dwm"
 }
 
 
 class TestServicesSafety(unittest.TestCase):
     def test_services_list_integrity_and_blacklist_protection(self):
         tweaks = get_services_tweaks()
-        self.assertEqual(len(tweaks), 11)
+        self.assertEqual(len(tweaks), 21)
 
         tweak_ids = set()
         for t in tweaks:
@@ -87,6 +89,30 @@ class TestServicesSafety(unittest.TestCase):
             winreg.REG_DWORD,
             4
         )
+
+    @patch("winreg.OpenKey")
+    @patch("winreg.SetValueEx")
+    @patch("winreg.QueryValueEx", return_value=(3, winreg.REG_DWORD))
+    @patch("core.services.run_cmd")
+    def test_all_services_apply_and_revert_lifecycle(self, mock_cmd, mock_query, mock_set, mock_open):
+        mock_open.return_value.__enter__.return_value = MagicMock()
+        mock_cmd.return_value = MagicMock(returncode=0, stdout="SUCCESS")
+
+        tweaks = get_services_tweaks()
+        self.assertEqual(len(tweaks), 21)
+
+        for t in tweaks:
+            # Check state
+            st = t.check()
+            self.assertIsInstance(st, bool)
+
+            # Apply
+            ok_apply, msg_apply = t.apply()
+            self.assertTrue(ok_apply, f"Apply failed for {t.id}: {msg_apply}")
+
+            # Revert
+            ok_revert, msg_revert = t.revert()
+            self.assertTrue(ok_revert, f"Revert failed for {t.id}: {msg_revert}")
 
 
 if __name__ == "__main__":

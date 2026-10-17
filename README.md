@@ -22,11 +22,17 @@
 - **Quản Lý Ứng Dụng Khởi Động (Startup Manager):** Kiểm tra và tắt các phần mềm tự chạy ngầm cùng Windows để tăng tốc độ bật máy.
 - **Tối Ưu Mạng & DNS Tốc Độ Cao:** Xóa bộ đệm DNS (`ipconfig /flushdns`) ẩn và chuyển đổi nhanh sang Cloudflare DNS (1.1.1.1) hoặc Google DNS (8.8.8.8).
 - **Quyền Riêng Tư (Privacy):** Tắt Telemetry chẩn đoán ngầm, tắt tìm kiếm Bing web trong Start Menu, tắt Advertising ID, tắt Activity History.
-- **Dịch Vụ Hệ Thống (Services - Chống BSOD 100%):** Vô hiệu hóa an toàn 10 dịch vụ chạy ngầm thừa thãi: `DiagTrack`, `dmwappushservice`, `RetailDemo`, `RemoteRegistry`, `MapsBroker`, `WerSvc` (Windows Error Reporting - chống giật khi crash dump), `lfsvc` (Geolocation - chống ping spike do quét Wi-Fi), `SCardSvr` (Smart Card), `WpcMonSvc` (Parental Controls), `SharedAccess` (Internet Connection Sharing), cùng Scheduled Task `Compatibility Appraiser`. Tuyệt đối bảo vệ và không bao giờ can thiệp các dịch vụ sống còn (Vanguard `vgc`, Audio, Display Driver, Network Stack).
+- **Dịch Vụ Hệ Thống (Services - Chống BSOD & Treo Máy 100% - v1.2.4):** Nghiên cứu chuyên sâu và vô hiệu hóa an toàn 20 dịch vụ chạy ngầm thừa thãi gây tốn CPU / RAM / I/O:
+  - *Chẩn đoán & Thu thập Telemetry:* `DiagTrack` (Connected User Experiences), `dmwappushservice` (WAP Push Message), `DPS` (Diagnostic Policy Service - ngăn chặn quét lỗi làm giật khung hình khi chơi game), `WerSvc` (Windows Error Reporting - chống giật lag crash dump), `wisvc` (Windows Insider Service - chặn tải ngầm bản Windows beta).
+  - *Mạng & Chia sẻ thừa thãi:* `MapsBroker` (Bản đồ ngoại tuyến), `SharedAccess` (Chia sẻ kết nối Internet ICS), `TrkWks` (Distributed Link Tracking Client - chặn quét link phân tán NTFS vô ích), `lltdsvc` (Link-Layer Topology Discovery - tắt broadcast sơ đồ mạng cũ), `NetTcpPortSharing` (Net.Tcp Port Sharing - cổng WCF doanh nghiệp không dùng).
+  - *Thiết bị ngoại vi không dùng & Thẻ thông minh:* `SCardSvr` (Smart Card), `ScDeviceEnum` (Smart Card Device Enumeration), `SCPolicySvc` (Smart Card Removal Policy - tắt chính sách khóa máy thẻ từ doanh nghiệp), `PhoneSvc` (Phone Service - ngưng thăm dò SIM điện thoại trên PC/Laptop thường), `SEMgrSvc` (Payments and NFC/SE Manager - tắt quản lý chạm NFC không cần thiết), `WalletService` (Microsoft Wallet).
+  - *Trải nghiệm bán lẻ & Giám sát:* `RetailDemo` (Dịch vụ trình diễn tại cửa hàng), `RemoteRegistry` (Chỉnh sửa Registry từ xa qua mạng), `lfsvc` (Geolocation Service - chống ping spike do quét vị trí Wi-Fi), `WpcMonSvc` (Parental Controls - Kiểm soát phụ huynh).
+  - *Tác vụ lên lịch ngầm (Scheduled Task):* `Microsoft\Windows\Application Experience\Microsoft Compatibility Appraiser` (chặn quét tương thích phần cứng ngầm).
+  - *Cam kết bảo vệ sống còn (Zero-Brick Guarantee):* Tuyệt đối không can thiệp và bảo vệ 100% các dịch vụ thiết yếu: Chống gian lận Valorant (`vgc`, `vgk`), Âm thanh (`AudioSrv`), Mạng Internet (`WlanSvc`, `Dhcp`, `Dnscache`), Driver Đồ Họa / Card kép Laptop Optimus (`nvlddmkm`, `igfxcuiservice`), Bluetooth, và Kernel Windows (`RpcSs`, `DWM`).
 - **Hiệu Năng & Gaming (Performance):** Giảm `MenuShowDelay` về 20ms, tắt Xbox Game DVR background recording, tối ưu TCP Auto-Tuning Stack.
 - **Dọn Rác & Bloatware (Clean):** Dọn dẹp an toàn thư mục tạm `%TEMP%` và `Windows\Temp`, dọn dẹp Component Store WinSxS bằng DISM, gỡ bỏ an toàn các ứng dụng rác cài sẵn.
 
-### 4. ⚡ Siêu Tối Ưu Phần Cứng CPU, GPU & RAM (v1.2.3)
+### 4. ⚡ Siêu Tối Ưu Phần Cứng CPU, GPU & RAM (v1.2.4)
 - **🚀 6 Tinh Chỉnh Vi Xử Lý (CPU Optimizer):**
   - **Độ Phân Giải Bộ Định Thời Kernel (Global Timer 1ms):** Ép Windows kernel cấp quyền timer 1ms/0.5ms chính xác cao, loại bỏ triệt để micro-stutter và giảm input lag chuột khi chơi Valorant / CS2.
   - **Ultimate Performance Power Plan:** Kích hoạt và chuyển sang cấu hình nguồn Ultimate Performance, loại bỏ hoàn toàn độ trễ hạ xung CPU.
@@ -104,14 +110,14 @@ optizime win/
 │   ├── memory_optimizer.py    # Thu gọn Working Sets & Standby List NT Native API
 │   ├── network_optimizer.py   # Xóa DNS cache & cấu hình Cloudflare/Google DNS
 │   ├── process_utils.py       # Chạy tiến trình ẩn 100%, ngăn chặn hiện tab CMD
-│   ├── version.py             # Định nghĩa phiên bản tập trung (v1.2.1)
+│   ├── version.py             # Định nghĩa phiên bản tập trung (v1.2.4)
 │   ├── updater.py             # Kiểm tra cập nhật GitHub Releases & tải installer
 │   ├── startup_manager.py     # Quản lý ứng dụng khởi động cùng Windows
 │   ├── safety.py              # System Restore Point & Registry Backup
 │   ├── sys_info.py            # Nhận diện Windows 10/11, kiểm tra quyền Admin
 │   ├── tweak_base.py          # Abstract Base Class cho Tweak
 │   ├── privacy.py             # Tinh chỉnh Telemetry & Quyền riêng tư
-│   ├── services.py            # Quản lý Dịch vụ & Scheduled Tasks an toàn
+│   ├── services.py            # Quản lý 20 Dịch vụ & Scheduled Tasks an toàn chống BSOD
 │   ├── performance.py         # Classic Context Menu, TCP stack, Xbox DVR, delay
 │   ├── cleaner.py             # Dọn file tạm, DISM WinSxS & Bloatware
 │   └── engine.py              # Bộ điều phối trung tâm quản lý toàn bộ tweaks
@@ -126,6 +132,7 @@ optizime win/
 │   ├── test_cpu_optimizer.py             # Unit tests cho 5 tinh chỉnh CPU
 │   ├── test_gpu_optimizer.py             # Unit tests cho 5 tinh chỉnh GPU
 │   ├── test_ram_optimizer_upgrade.py     # Unit tests cho nâng cấp RAM & daemon worker
+│   ├── test_services_safety.py           # Unit tests kiểm định 20 services an toàn chống BSOD
 │   ├── test_integration_workflow.py     # Integration tests & Zero-Disk Constraint audit
 │   ├── test_core.py                      # Unit tests các tinh chỉnh cốt lõi
 │   ├── test_memory_optimizer.py          # Unit tests memory purge NT API

@@ -330,6 +330,186 @@ class DisableSharedAccessTweak(ServiceTweak):
         )
 
 
+class DisableDPSTweak(ServiceTweak):
+    """Tắt dịch vụ Diagnostic Policy Service (DPS)."""
+    def __init__(self):
+        super().__init__(
+            tweak_id="service_dps",
+            name="Tắt dịch vụ Chính sách Chẩn đoán lỗi ngầm (DPS)",
+            service_name="DPS",
+            description="Ngăn Windows liên tục phân tích và ghi log chẩn đoán lỗi vào đĩa trong lúc chơi game hoặc làm việc.",
+            explanation=(
+                "Dịch vụ 'DPS' (Diagnostic Policy Service) tự động kích hoạt các kịch bản phát hiện sự cố và ghi log chẩn đoán ngầm.\n"
+                "Đối với máy tính cá nhân và máy gaming, việc DPS chạy ngầm liên tục thường gây hiện tượng giật khung hình nhẹ (micro-stutter) và hao phí I/O.\n"
+                "Tắt dịch vụ này an toàn 100%, hoàn toàn không ảnh hưởng đến bất kỳ driver phần cứng hay sự ổn định của hệ điều hành."
+            ),
+            default_start_type="auto",
+            is_recommended=True
+        )
+
+
+class DisableTrkWksTweak(ServiceTweak):
+    """Tắt dịch vụ Distributed Link Tracking Client (TrkWks)."""
+    def __init__(self):
+        super().__init__(
+            tweak_id="service_trkwks",
+            name="Tắt dịch vụ Theo dõi liên kết NTFS mạng (TrkWks)",
+            service_name="TrkWks",
+            description="Vô hiệu hóa việc theo dõi liên kết giữa các tệp tin trong mạng nội bộ domain doanh nghiệp.",
+            explanation=(
+                "Dịch vụ 'TrkWks' duy trì các liên kết tệp tin NTFS trên máy tính hoặc giữa các máy tính trong một mạng miền (Active Directory Domain).\n"
+                "Máy tính cá nhân không kết nối domain doanh nghiệp hoàn toàn không cần đến dịch vụ này.\n"
+                "Tắt dịch vụ giúp giảm bớt số lượng file handles và luồng svchost chạy ngầm, an toàn tuyệt đối 100%."
+            ),
+            default_start_type="auto",
+            is_recommended=True
+        )
+
+
+class DisableWisvcTweak(ServiceTweak):
+    """Tắt dịch vụ Windows Insider Service (wisvc)."""
+    def __init__(self):
+        super().__init__(
+            tweak_id="service_wisvc",
+            name="Tắt dịch vụ Windows Insider Program (wisvc)",
+            service_name="wisvc",
+            description="Ngăn hệ thống ngầm kiểm tra và kết nối máy chủ gửi bản build thử nghiệm của Microsoft.",
+            explanation=(
+                "Dịch vụ 'wisvc' cung cấp cơ sở hạ tầng cho chương trình thử nghiệm Windows Insider Program.\n"
+                "Nếu bạn sử dụng phiên bản Windows chính thức ổn định và không muốn tham gia thử nghiệm các bản vá lỗi chưa hoàn thiện, dịch vụ này chạy ngầm là không cần thiết.\n"
+                "Tắt dịch vụ này giúp giảm thiểu việc kết nối máy chủ ngầm và an toàn 100%."
+            ),
+            default_start_type="demand",
+            is_recommended=True
+        )
+
+
+class DisablePhoneSvcTweak(ServiceTweak):
+    """Tắt dịch vụ Phone Service (PhoneSvc)."""
+    def __init__(self):
+        super().__init__(
+            tweak_id="service_phone",
+            name="Tắt dịch vụ Điện thoại di động (Phone Service - PhoneSvc)",
+            service_name="PhoneSvc",
+            description="Vô hiệu hóa tiến trình quản lý trạng thái điện thoại di động và dịch vụ viễn thông trên PC.",
+            explanation=(
+                "Dịch vụ 'PhoneSvc' quản lý trạng thái điện thoại di động trên thiết bị (chỉ thực sự có ý nghĩa trên thiết bị có khe SIM hoặc modem di động).\n"
+                "Trên máy tính để bàn (PC) và laptop thông thường, tiến trình này hoàn toàn thừa thãi.\n"
+                "Tắt dịch vụ an toàn 100%, không ảnh hưởng đến Wi-Fi, Ethernet, Bluetooth hay mạng Internet."
+            ),
+            default_start_type="demand",
+            is_recommended=True
+        )
+
+
+class DisableSEMgrSvcTweak(ServiceTweak):
+    """Tắt dịch vụ Payments and NFC/SE Manager (SEMgrSvc)."""
+    def __init__(self):
+        super().__init__(
+            tweak_id="service_semgrsvc",
+            name="Tắt dịch vụ Quản lý thanh toán chip NFC (SEMgrSvc)",
+            service_name="SEMgrSvc",
+            description="Dịch vụ quản lý phần tử bảo mật thanh toán chạm qua chip NFC phần cứng.",
+            explanation=(
+                "Dịch vụ 'SEMgrSvc' (Payments and NFC/SE Manager) dùng để quản lý giao dịch thanh toán quẹt thẻ qua chip NFC trên thiết bị phần cứng hỗ trợ.\n"
+                "Các dòng PC và Laptop cá nhân không sử dụng tính năng này để chạm thanh toán.\n"
+                "Tắt dịch vụ giúp giảm thiểu tiến trình nền không cần thiết, an toàn 100%."
+            ),
+            default_start_type="demand",
+            is_recommended=True
+        )
+
+
+class DisableWalletServiceTweak(ServiceTweak):
+    """Tắt dịch vụ Microsoft Wallet (WalletService)."""
+    def __init__(self):
+        super().__init__(
+            tweak_id="service_wallet",
+            name="Tắt dịch vụ Ví điện tử Microsoft Wallet (WalletService)",
+            service_name="WalletService",
+            description="Vô hiệu hóa dịch vụ lưu trữ thẻ thanh toán của ứng dụng Microsoft Wallet.",
+            explanation=(
+                "Dịch vụ 'WalletService' hỗ trợ lưu trữ thẻ tín dụng và vé số cho ứng dụng Microsoft Wallet.\n"
+                "Người dùng thông thường và game thủ thực hiện thanh toán trực tiếp qua trình duyệt web an toàn (Steam, Riot, Momo, thẻ ngân hàng, v.v.).\n"
+                "Tắt dịch vụ này giúp giảm bớt tài nguyên ngầm và an toàn 100%."
+            ),
+            default_start_type="demand",
+            is_recommended=True
+        )
+
+
+class DisableScDeviceEnumTweak(ServiceTweak):
+    """Tắt dịch vụ Smart Card Device Enumeration (ScDeviceEnum)."""
+    def __init__(self):
+        super().__init__(
+            tweak_id="service_sc_device_enum",
+            name="Tắt dịch vụ Liệt kê đầu đọc thẻ chip thông minh (ScDeviceEnum)",
+            service_name="ScDeviceEnum",
+            description="Ngăn hệ thống định kỳ tạo các nút thiết bị phần mềm tìm kiếm đầu đọc thẻ chip thông minh.",
+            explanation=(
+                "Dịch vụ 'ScDeviceEnum' chịu trách nhiệm tạo và giám sát các nút thiết bị phần mềm cho đầu đọc Smart Card vật lý.\n"
+                "Khi máy tính không cắm đầu đọc thẻ chip bảo mật văn phòng, dịch vụ này chạy ngầm là hoàn toàn dư thừa.\n"
+                "An toàn tuyệt đối 100%, không bao giờ gây lỗi màn hình xanh (BSOD)."
+            ),
+            default_start_type="demand",
+            is_recommended=True
+        )
+
+
+class DisableSCPolicySvcTweak(ServiceTweak):
+    """Tắt chính sách Smart Card Removal Policy (SCPolicySvc)."""
+    def __init__(self):
+        super().__init__(
+            tweak_id="service_sc_policy",
+            name="Tắt chính sách Khóa máy khi rút thẻ chip (SCPolicySvc)",
+            service_name="SCPolicySvc",
+            description="Vô hiệu hóa dịch vụ cấu hình khóa desktop khi rút thẻ thông minh vật lý.",
+            explanation=(
+                "Dịch vụ 'SCPolicySvc' (Smart Card Removal Policy) chỉ dùng trong các cơ quan chính phủ hoặc ngân hàng yêu cầu rút thẻ chip là khóa máy tính.\n"
+                "Người dùng cá nhân khóa máy tính thủ công bằng tổ hợp phím Windows + L.\n"
+                "Tắt dịch vụ này giúp hệ thống gọn nhẹ, an toàn 100%."
+            ),
+            default_start_type="demand",
+            is_recommended=True
+        )
+
+
+class DisableLltdsvcTweak(ServiceTweak):
+    """Tắt dịch vụ Link-Layer Topology Discovery Mapper (lltdsvc)."""
+    def __init__(self):
+        super().__init__(
+            tweak_id="service_lltdsvc",
+            name="Tắt dịch vụ Thăm dò sơ đồ mạng cục bộ cũ (lltdsvc - LLTD)",
+            service_name="lltdsvc",
+            description="Ngăn chặn việc gửi các gói tin thăm dò vẽ sơ đồ thiết bị mạng LAN theo chuẩn cũ.",
+            explanation=(
+                "Dịch vụ 'lltdsvc' (Link-Layer Topology Discovery Mapper) tạo bản đồ mạng hiển thị vị trí các thiết bị từ thời Windows Vista.\n"
+                "Các ứng dụng hiện đại không còn sử dụng giao thức này; việc thăm dò ngầm liên tục chỉ làm tiêu tốn băng thông và chu kỳ CPU.\n"
+                "Tắt dịch vụ này hoàn toàn không làm gián đoạn kết nối Internet hay mạng nội bộ LAN/Wi-Fi."
+            ),
+            default_start_type="demand",
+            is_recommended=True
+        )
+
+
+class DisableNetTcpPortSharingTweak(ServiceTweak):
+    """Tắt dịch vụ Net.Tcp Port Sharing (NetTcpPortSharing)."""
+    def __init__(self):
+        super().__init__(
+            tweak_id="service_nettcpportsharing",
+            name="Tắt dịch vụ Chia sẻ cổng Net.Tcp (.NET Framework WCF)",
+            service_name="NetTcpPortSharing",
+            description="Vô hiệu hóa dịch vụ chia sẻ cổng TCP cho các giao thức mạng WCF doanh nghiệp cũ.",
+            explanation=(
+                "Dịch vụ 'NetTcpPortSharing' cho phép nhiều tiến trình dịch vụ chia sẻ cùng một cổng TCP qua giao thức net.tcp.\n"
+                "Tính năng này chỉ phục vụ các hệ thống máy chủ doanh nghiệp phát triển trên WCF cũ, không có game hay phần mềm tiêu dùng nào cần tới.\n"
+                "Tắt dịch vụ giúp giảm diện tích tấn công mạng (attack surface) và an toàn tuyệt đối 100%."
+            ),
+            default_start_type="demand",
+            is_recommended=True
+        )
+
+
 def get_services_tweaks() -> list[Tweak]:
     """Trả về danh sách tất cả các tùy chọn tối ưu Dịch vụ an toàn tuyệt đối (chống BSOD 100%)."""
     return [
@@ -343,5 +523,15 @@ def get_services_tweaks() -> list[Tweak]:
         DisableSmartCardTweak(),
         DisableParentalControlsTweak(),
         DisableSharedAccessTweak(),
-        DisableCompatibilityAppraiserTweak()
+        DisableCompatibilityAppraiserTweak(),
+        DisableDPSTweak(),
+        DisableTrkWksTweak(),
+        DisableWisvcTweak(),
+        DisablePhoneSvcTweak(),
+        DisableSEMgrSvcTweak(),
+        DisableWalletServiceTweak(),
+        DisableScDeviceEnumTweak(),
+        DisableSCPolicySvcTweak(),
+        DisableLltdsvcTweak(),
+        DisableNetTcpPortSharingTweak()
     ]
