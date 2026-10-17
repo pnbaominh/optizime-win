@@ -26,7 +26,7 @@ class TestGpuOptimizer(unittest.TestCase):
         self.assertEqual(len(descriptors), 5)
         ids = [d.tweak_id for d in descriptors]
         self.assertIn("gpu_hags", ids)
-        self.assertIn("gpu_vrr", ids)
+        self.assertIn("gpu_disable_gamedvr", ids)
         self.assertIn("gpu_game_mode", ids)
         self.assertIn("gpu_priority_dwm_flush", ids)
         self.assertIn("gpu_high_performance_preference", ids)
@@ -56,38 +56,21 @@ class TestGpuOptimizer(unittest.TestCase):
             self.assertEqual(res_revert.new_state, TweakState.DEFAULT)
             self.assertTrue(res_revert.requires_reboot)
 
-    @patch("winreg.CreateKey")
+    @patch.object(GpuOptimizerService, "is_admin", return_value=True)
+    @patch("winreg.CreateKeyEx")
     @patch("winreg.SetValueEx")
-    @patch("winreg.QueryValueEx")
-    def test_vrr_lifecycle(self, mock_query, mock_set, mock_create):
+    def test_disable_gamedvr_lifecycle(self, mock_set, mock_create, mock_admin):
         mock_create.return_value.__enter__.return_value = MagicMock()
-        mock_query.return_value = ("OtherSetting=0;", winreg.REG_SZ)
 
-        res_apply = self.service.apply_tweak("gpu_vrr")
+        res_apply = self.service.apply_tweak("gpu_disable_gamedvr")
         self.assertTrue(res_apply.success)
         self.assertEqual(res_apply.new_state, TweakState.OPTIMIZED)
 
-        # Verify appended or replaced
-        mock_set.assert_called_with(
-            mock_create.return_value.__enter__.return_value,
-            "DirectXUserGlobalSettings",
-            0,
-            winreg.REG_SZ,
-            "OtherSetting=0;VRROptimizeEnable=1;"
-        )
-
-        # Revert
-        mock_query.return_value = ("OtherSetting=0;VRROptimizeEnable=1;", winreg.REG_SZ)
-        res_revert = self.service.revert_tweak("gpu_vrr")
-        self.assertTrue(res_revert.success)
-        self.assertEqual(res_revert.new_state, TweakState.DEFAULT)
-        mock_set.assert_called_with(
-            mock_create.return_value.__enter__.return_value,
-            "DirectXUserGlobalSettings",
-            0,
-            winreg.REG_SZ,
-            "OtherSetting=0;VRROptimizeEnable=0;"
-        )
+        with patch("winreg.OpenKey") as mock_open:
+            mock_open.return_value.__enter__.return_value = MagicMock()
+            res_revert = self.service.revert_tweak("gpu_disable_gamedvr")
+            self.assertTrue(res_revert.success)
+            self.assertEqual(res_revert.new_state, TweakState.DEFAULT)
 
     @patch("winreg.CreateKeyEx")
     @patch("winreg.SetValueEx")
@@ -107,26 +90,36 @@ class TestGpuOptimizer(unittest.TestCase):
     @patch("winreg.CreateKey")
     @patch("winreg.SetValueEx")
     def test_high_performance_gpu_preference(self, mock_set, mock_create):
+        from core.contracts import RegistryBackupEntry, RegistryRoot
         mock_create.return_value.__enter__.return_value = MagicMock()
 
-        res = self.service.apply_tweak("gpu_high_performance_preference")
-        self.assertTrue(res.success)
-        self.assertEqual(res.new_state, TweakState.OPTIMIZED)
-        mock_set.assert_called_with(
-            mock_create.return_value.__enter__.return_value,
-            "DefaultGpuPreference",
-            0,
-            winreg.REG_DWORD,
-            2
-        )
+        with patch.object(self.backup_service, "capture_entry") as mock_cap:
+            mock_cap.return_value = RegistryBackupEntry(
+                root=RegistryRoot.HKCU,
+                subkey="Software\\Microsoft\\DirectX\\UserGpuPreferences",
+                value_name="DefaultGpuPreference",
+                value_type=winreg.REG_DWORD,
+                previous_value=None,
+                existed_before=False
+            )
+            res = self.service.apply_tweak("gpu_high_performance_preference")
+            self.assertTrue(res.success)
+            self.assertEqual(res.new_state, TweakState.OPTIMIZED)
+            mock_set.assert_called_with(
+                mock_create.return_value.__enter__.return_value,
+                "DefaultGpuPreference",
+                0,
+                winreg.REG_DWORD,
+                2
+            )
 
-        with patch("winreg.OpenKey") as mock_open:
-            mock_open.return_value.__enter__.return_value = MagicMock()
-            with patch("winreg.DeleteValue") as mock_del:
-                res_revert = self.service.revert_tweak("gpu_high_performance_preference")
-                self.assertTrue(res_revert.success)
-                self.assertEqual(res_revert.new_state, TweakState.DEFAULT)
-                mock_del.assert_called_once()
+            with patch("winreg.OpenKey") as mock_open:
+                mock_open.return_value.__enter__.return_value = MagicMock()
+                with patch("winreg.DeleteValue") as mock_del:
+                    res_revert = self.service.revert_tweak("gpu_high_performance_preference")
+                    self.assertTrue(res_revert.success)
+                    self.assertEqual(res_revert.new_state, TweakState.DEFAULT)
+                    mock_del.assert_called_once()
 
     @patch("winreg.CreateKey")
     @patch("winreg.SetValueEx")

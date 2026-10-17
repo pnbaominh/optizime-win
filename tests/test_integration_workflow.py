@@ -55,7 +55,7 @@ class TestIntegrationWorkflow(unittest.TestCase):
 
         # 1. Quick Apply CPU
         cpu_results = self.cpu_service.quick_apply_all()
-        self.assertEqual(len(cpu_results), 5)
+        self.assertEqual(len(cpu_results), 6)
         for tid, res in cpu_results.items():
             self.assertTrue(res.success, f"CPU tweak {tid} failed: {res.message}")
 

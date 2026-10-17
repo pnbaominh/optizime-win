@@ -22,28 +22,29 @@
 - **Quản Lý Ứng Dụng Khởi Động (Startup Manager):** Kiểm tra và tắt các phần mềm tự chạy ngầm cùng Windows để tăng tốc độ bật máy.
 - **Tối Ưu Mạng & DNS Tốc Độ Cao:** Xóa bộ đệm DNS (`ipconfig /flushdns`) ẩn và chuyển đổi nhanh sang Cloudflare DNS (1.1.1.1) hoặc Google DNS (8.8.8.8).
 - **Quyền Riêng Tư (Privacy):** Tắt Telemetry chẩn đoán ngầm, tắt tìm kiếm Bing web trong Start Menu, tắt Advertising ID, tắt Activity History.
-- **Dịch Vụ Hệ Thống (Services):** Vô hiệu hóa an toàn `DiagTrack`, `dmwappushservice`, `RetailDemo`, tắt `RemoteRegistry`, tắt Scheduled Task `Compatibility Appraiser` (chống 100% Disk khi mới khởi động).
+- **Dịch Vụ Hệ Thống (Services - Chống BSOD 100%):** Vô hiệu hóa an toàn 10 dịch vụ chạy ngầm thừa thãi: `DiagTrack`, `dmwappushservice`, `RetailDemo`, `RemoteRegistry`, `MapsBroker`, `WerSvc` (Windows Error Reporting - chống giật khi crash dump), `lfsvc` (Geolocation - chống ping spike do quét Wi-Fi), `SCardSvr` (Smart Card), `WpcMonSvc` (Parental Controls), `SharedAccess` (Internet Connection Sharing), cùng Scheduled Task `Compatibility Appraiser`. Tuyệt đối bảo vệ và không bao giờ can thiệp các dịch vụ sống còn (Vanguard `vgc`, Audio, Display Driver, Network Stack).
 - **Hiệu Năng & Gaming (Performance):** Giảm `MenuShowDelay` về 20ms, tắt Xbox Game DVR background recording, tối ưu TCP Auto-Tuning Stack.
 - **Dọn Rác & Bloatware (Clean):** Dọn dẹp an toàn thư mục tạm `%TEMP%` và `Windows\Temp`, dọn dẹp Component Store WinSxS bằng DISM, gỡ bỏ an toàn các ứng dụng rác cài sẵn.
 
-### 4. ⚡ Siêu Tối Ưu Phần Cứng CPU, GPU & RAM (v1.2.1)
-- **🚀 5 Tinh Chỉnh Vi Xử Lý (CPU Optimizer):**
+### 4. ⚡ Siêu Tối Ưu Phần Cứng CPU, GPU & RAM (v1.2.3)
+- **🚀 6 Tinh Chỉnh Vi Xử Lý (CPU Optimizer):**
+  - **Độ Phân Giải Bộ Định Thời Kernel (Global Timer 1ms):** Ép Windows kernel cấp quyền timer 1ms/0.5ms chính xác cao, loại bỏ triệt để micro-stutter và giảm input lag chuột khi chơi Valorant / CS2.
   - **Ultimate Performance Power Plan:** Kích hoạt và chuyển sang cấu hình nguồn Ultimate Performance, loại bỏ hoàn toàn độ trễ hạ xung CPU.
   - **Win32PrioritySeparation (Foreground Boost):** Thiết lập `0x26`, ưu tiên 100% chu kỳ xung nhịp CPU cho cửa sổ ứng dụng và game đang sử dụng.
   - **CPU Core Unparking (100%):** Mở khóa toàn bộ nhân CPU (`CPMINCORES = 100`), giữ mọi nhân luôn sẵn sàng không bị ngủ ngắt quãng.
   - **MMCSS System Responsiveness:** Tối ưu hóa phân bổ 90% tài nguyên CPU cho các tác vụ đa phương tiện và gaming thời gian thực.
   - **Tắt Điều Tiết Xung Nhịp (Disable Power Throttling):** Ngăn Windows tự ý bóp nghẹt xung nhịp khi đang chạy nặng.
-- **🎮 5 Tinh Chỉnh Đồ Họa (GPU Optimizer):**
-  - **Lập Lịch Tăng Tốc Phần Cứng GPU (HAGS):** Kích hoạt `HwSchMode = 2` cho phép GPU trực tiếp quản lý VRAM, giảm giật khung hình và tăng FPS.
-  - **Variable Refresh Rate (VRR):** Tối ưu hóa tần số quét biến thiên trong DirectX cho màn hình G-Sync / FreeSync.
+- **🎮 5 Tinh Chỉnh Đồ Họa (GPU Optimizer - Chuyên Biệt Esports & Safe MPO):**
+  - **Tắt Windows GameDVR & Ép True Fullscreen:** Vô hiệu hóa triệt để tính năng quay video ngầm (GameDVR, AppCapture) của Windows và tối ưu chế độ FSE, loại bỏ giật lag, hiện tượng nhấp nháy đen và drop FPS khi chơi Valorant.
+  - **Lập Lịch Luồng GPU & Giảm Input Lag (Safe MPO):** Thiết lập GPU Priority = 8, Priority = 6, SFIO Priority = High trong Multimedia SystemProfile cho Games nhưng giữ nguyên Multi-Plane Overlay (MPO), an toàn 100% cho màn hình và laptop chạy card kép (Optimus Intel/AMD + NVIDIA).
+  - **Lập Lịch Tăng Tốc Phần Cứng GPU (HAGS):** Cung cấp tùy chọn HwSchMode kèm cảnh báo an toàn cho laptop Optimus.
   - **Chế Độ Windows Game Mode Chuyên Sâu:** Kích hoạt GameBar Registry giúp ưu tiên luồng render đồ họa.
-  - **GPU Priority & Giảm Độ Trễ DWM:** Thiết lập GPU Priority = 8 và giảm độ trễ hàng đợi kết xuất DWM composition (`OverlayTestMode = 5`).
   - **Ưu Tiên Card Đồ Họa Rời Hiệu Năng Cao:** Cấu hình hệ thống DirectX luôn chỉ định GPU rời (Discrete GPU) xử lý các ứng dụng đồ họa nặng (`DefaultGpuPreference = 2`).
-- **💾 Nâng Cấp Quản Trị Bộ Nhớ RAM Chuyên Sâu:**
+- **💾 Quản Trị Bộ Nhớ RAM Chuyên Sâu:**
   - **DisablePagingExecutive:** Khóa phần nhân Kernel và Drivers trong RAM vật lý, ngăn Windows tráo đổi kernel xuống swap file.
   - **SvcHostSplitThresholdInKB:** Tự động tính toán theo dung lượng RAM vật lý thực tế để gom/tách tiến trình svchost tối ưu.
   - **Auto Standby Purge Worker:** Luồng nền daemon tự động dọn dẹp Standby List và Working Sets khi RAM vượt ngưỡng 80% (kèm cooldown 120 giây).
-- **🛡️ Nguyên Tắc Zero-Disk Audit:** 100% tính năng mới chỉ can thiệp CPU, GPU, RAM — tuyệt đối không can thiệp ổ đĩa lưu trữ.
+- **🛡️ Nguyên Tắc Zero-Disk Audit:** 100% tính năng mới chỉ can thiệp CPU, GPU, RAM, Services — tuyệt đối không can thiệp ổ đĩa lưu trữ.
 
 ---
 

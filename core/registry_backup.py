@@ -39,12 +39,23 @@ ALLOWED_HARDWARE_TARGETS: Set[Tuple[str, str, str]] = {
     ("hklm", r"software\microsoft\windows nt\currentversion\multimedia\systemprofile", "networkthrottlingindex"),
     # CPU Power Throttling
     ("hklm", r"system\currentcontrolset\control\power\powerthrottling", "powerthrottlingoff"),
+    # CPU Global Timer Resolution (Valorant micro-stutter fix)
+    ("hklm", r"system\currentcontrolset\control\session manager\kernel", "globaltimerresolutionrequests"),
     # GPU HAGS
     ("hklm", r"system\currentcontrolset\control\graphicsdrivers", "hwschmode"),
+    # GPU GameDVR / FSE (Valorant stutter fix replacing VRR)
+    ("hkcu", r"system\gameconfigstore", "gamedvr_enabled"),
+    ("hkcu", r"system\gameconfigstore", "gamedvr_fsebehaviormode"),
+    ("hkcu", r"system\gameconfigstore", "gamedvr_honoruserfsebehaviormode"),
+    ("hkcu", r"system\gameconfigstore", "gamedvr_dxgihonorfsewindowscompatible"),
+    ("hkcu", r"software\microsoft\windows\currentversion\gamedvr", "appcaptureenabled"),
+    ("hkcu", r"software\microsoft\windows\currentversion\gamedvr", "historicalcaptureenabled"),
+    ("hklm", r"software\policies\microsoft\windows\gamedvr", "allowgamedvr"),
     # GPU VRR & User Preference
     ("hkcu", r"software\microsoft\directx\usergpupreferences", "directxuserglobalsettings"),
     ("hkcu", r"software\microsoft\directx\usergpupreferences", "defaultgpupreference"),
     # GPU Game Mode
+    ("hkcu", r"software\microsoft\gamebar", "allowautogamemode"),
     ("hkcu", r"software\microsoft\gamebar", "autogamemodeenabled"),
     # GPU MMCSS & DWM
     ("hklm", r"software\microsoft\windows nt\currentversion\multimedia\systemprofile\tasks\games", "gpu priority"),

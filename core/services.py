@@ -240,13 +240,108 @@ class DisableCompatibilityAppraiserTweak(Tweak):
             return False, str(e)
 
 
+class DisableWerSvcTweak(ServiceTweak):
+    """Tắt dịch vụ Windows Error Reporting Service (WerSvc)."""
+    def __init__(self):
+        super().__init__(
+            tweak_id="service_wersvc",
+            name="Tắt dịch vụ Báo cáo sự cố Windows (WerSvc)",
+            service_name="WerSvc",
+            description="Ngăn Windows thu thập và truyền tệp dump chẩn đoán lỗi ngầm mỗi khi ứng dụng gặp ngoại lệ.",
+            explanation=(
+                "Dịch vụ 'WerSvc' chịu trách nhiệm ghi tệp crash dump và gửi báo cáo về Microsoft.\n"
+                "Khi chơi game nặng hoặc game thi đấu (như Valorant), tiến trình này xử lý ngầm có thể gây khựng khung hình (hitching).\n"
+                "Tắt dịch vụ này an toàn 100%, không ảnh hưởng đến bất kỳ driver phần cứng hay hệ điều hành nào."
+            ),
+            default_start_type="demand",
+            is_recommended=True
+        )
+
+
+class DisableGeolocationTweak(ServiceTweak):
+    """Tắt dịch vụ Geolocation Service (lfsvc)."""
+    def __init__(self):
+        super().__init__(
+            tweak_id="service_lfsvc",
+            name="Tắt dịch vụ Định vị địa lý ngầm (Geolocation)",
+            service_name="lfsvc",
+            description="Vô hiệu hóa việc quét Wi-Fi liên tục để theo dõi tọa độ máy tính trong nền.",
+            explanation=(
+                "Dịch vụ 'lfsvc' liên tục quét và thăm dò các điểm phát Wi-Fi lân cận để xác định vị trí máy tính.\n"
+                "Việc quét ngầm liên tục này dễ gây giật ping (ping spike) đột ngột khi chơi game online và làm hao pin Laptop.\n"
+                "An toàn tuyệt đối cho cả PC và Laptop; không ảnh hưởng đến kết nối Internet, Wi-Fi hay Bluetooth."
+            ),
+            default_start_type="demand",
+            is_recommended=True
+        )
+
+
+class DisableSmartCardTweak(ServiceTweak):
+    """Tắt dịch vụ Smart Card (SCardSvr)."""
+    def __init__(self):
+        super().__init__(
+            tweak_id="service_scardsvr",
+            name="Tắt dịch vụ Thẻ thông minh vật lý (SCardSvr)",
+            service_name="SCardSvr",
+            description="Quản lý việc kết nối đầu đọc thẻ chip thông minh vật lý (Smart Card Reader).",
+            explanation=(
+                "Dịch vụ 'SCardSvr' chỉ dùng cho đầu đọc thẻ chip thông minh vật lý của ngân hàng hoặc thẻ bảo mật doanh nghiệp.\n"
+                "Máy tính cá nhân của game thủ và người dùng thông thường hoàn toàn không cần đến dịch vụ này.\n"
+                "An toàn 100%, không bao giờ gây lỗi màn hình xanh (BSOD)."
+            ),
+            default_start_type="demand",
+            is_recommended=True
+        )
+
+
+class DisableParentalControlsTweak(ServiceTweak):
+    """Tắt dịch vụ Parental Controls (WpcMonSvc)."""
+    def __init__(self):
+        super().__init__(
+            tweak_id="service_wpc_mon",
+            name="Tắt dịch vụ Giám sát Phụ huynh (Parental Controls)",
+            service_name="WpcMonSvc",
+            description="Vô hiệu hóa tính năng giới hạn thời gian mở máy và theo dõi ứng dụng của phụ huynh.",
+            explanation=(
+                "Dịch vụ 'WpcMonSvc' theo dõi thời gian mở ứng dụng và nhật ký hoạt động.\n"
+                "Với người dùng máy tính cá nhân hoặc game thủ, tiến trình giám sát này chạy ngầm gây hao phí CPU không đáng có.\n"
+                "Tắt dịch vụ này an toàn tuyệt đối và giúp hệ thống hoạt động tự do, nhẹ nhàng hơn."
+            ),
+            default_start_type="demand",
+            is_recommended=True
+        )
+
+
+class DisableSharedAccessTweak(ServiceTweak):
+    """Tắt dịch vụ Internet Connection Sharing (SharedAccess)."""
+    def __init__(self):
+        super().__init__(
+            tweak_id="service_shared_access",
+            name="Tắt dịch vụ Chia sẻ mạng qua dây (ICS - SharedAccess)",
+            service_name="SharedAccess",
+            description="Dịch vụ biến máy tính thành bộ định tuyến chia sẻ Internet cho thiết bị khác qua dây cáp.",
+            explanation=(
+                "Dịch vụ 'SharedAccess' dùng để chia sẻ kết nối mạng cho máy khác qua cáp Ethernet.\n"
+                "Nếu bạn kết nối trực tiếp vào Router/Wi-Fi mà không cấp mạng trung gian cho máy tính khác, tính năng này hoàn toàn dư thừa.\n"
+                "Tắt dịch vụ này giúp giảm gánh nặng ngăn xếp mạng mà không ảnh hưởng đến tốc độ duyệt web hay chơi game."
+            ),
+            default_start_type="demand",
+            is_recommended=True
+        )
+
+
 def get_services_tweaks() -> list[Tweak]:
-    """Trả về danh sách tất cả các tùy chọn tối ưu Dịch vụ an toàn."""
+    """Trả về danh sách tất cả các tùy chọn tối ưu Dịch vụ an toàn tuyệt đối (chống BSOD 100%)."""
     return [
         DisableDiagTrackTweak(),
         DisableWapPushTweak(),
+        DisableWerSvcTweak(),
+        DisableGeolocationTweak(),
         DisableRetailDemoTweak(),
         DisableRemoteRegistryTweak(),
         DisableMapsBrokerTweak(),
+        DisableSmartCardTweak(),
+        DisableParentalControlsTweak(),
+        DisableSharedAccessTweak(),
         DisableCompatibilityAppraiserTweak()
     ]

@@ -85,6 +85,17 @@ class CpuOptimizerService:
             ),
         )
 
+        specs_timer = (
+            RegistryTargetSpec(
+                root=RegistryRoot.HKLM,
+                subkey="SYSTEM\\CurrentControlSet\\Control\\Session Manager\\kernel",
+                value_name="GlobalTimerResolutionRequests",
+                value_type=RegistryValueType.REG_DWORD,
+                optimized_value=1,  # 1 = Cho phép game yêu cầu timer 1ms/0.5ms chính xác cao
+                default_value=0
+            ),
+        )
+
         desc_list = [
             TweakDescriptor(
                 tweak_id="cpu_ultimate_power_plan",
@@ -130,6 +141,15 @@ class CpuOptimizerService:
                 requires_admin=True,
                 requires_reboot=False,
                 registry_targets=specs_throttling
+            ),
+            TweakDescriptor(
+                tweak_id="cpu_global_timer_resolution",
+                category=TweakCategory.CPU,
+                title="Độ Phân Giải Bộ Định Thời Kernel (Global Timer 1ms)",
+                description="Ép Windows kernel cấp quyền độ phân giải 1ms/0.5ms chính xác cao, loại bỏ micro-stutter và giảm input lag chuột trong Valorant.",
+                requires_admin=True,
+                requires_reboot=False,
+                registry_targets=specs_timer
             ),
         ]
 

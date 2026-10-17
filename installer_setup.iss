@@ -4,7 +4,7 @@
 ; =====================================================================
 
 #define MyAppName "Windows Deep Optimizer"
-#define MyAppVersion "1.2.1"
+#define MyAppVersion "1.2.3"
 #define MyAppPublisher "Bim"
 #define MyAppURL "https://github.com/pnbaominh/optizime-win"
 #define MyAppExeName "WindowsDeepOptimizer.exe"

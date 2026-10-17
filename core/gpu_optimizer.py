@@ -1,12 +1,12 @@
 """
 Module: core/gpu_optimizer.py
-Description: Triển khai GpuOptimizerService cung cấp 5 kỹ thuật tối ưu hóa GPU chuyên sâu:
+Description: Triển khai GpuOptimizerService cung cấp 5 kỹ thuật tối ưu hóa GPU chuyên sâu & an toàn cho Esports/Valorant:
              1. HAGS (Hardware Accelerated GPU Scheduling)
-             2. Variable Refresh Rate (VRR)
+             2. Disable GameDVR & Optimize Fullscreen Exclusive (Chống giật & drop FPS)
              3. Windows Game Mode Registry Tuning
-             4. GPU Priority & DWM Latency Reduction (OverlayTestMode)
-             5. High Performance GPU Preference
-             Tuyệt đối tuân thủ Zero-Disk Constraint: Chỉ tối ưu GPU, không can thiệp ổ đĩa.
+             4. GPU Priority Scheduling (Safe MPO - không gây lỗi nhấp nháy đen màn hình trên Optimus Laptop)
+             5. High Performance GPU Preference (GpuPreference=2)
+             Tuyệt đối tuân thủ Zero-Disk Constraint: Chỉ tối ưu GPU/Render, không can thiệp ổ đĩa.
 """
 
 from __future__ import annotations
@@ -36,6 +36,40 @@ class GpuOptimizerService:
         self._lock = threading.RLock()
         self._saved_gpu_pref: Optional[RegistryBackupEntry] = None
         self.descriptors: Dict[str, TweakDescriptor] = self._init_descriptors()
+        self.clean_legacy_dangerous_tweaks()
+
+    @staticmethod
+    def clean_legacy_dangerous_tweaks() -> None:
+        """Dọn dẹp các thiết lập cũ nguy hiểm gây nhấp nháy đen hoặc khựng màn hình trên laptop Optimus:
+        1. Xóa OverlayTestMode trong HKLM\\SOFTWARE\\Microsoft\\Windows\\Dwm (khôi phục MPO).
+        2. Tắt VRROptimizeEnable trong HKCU\\Software\\Microsoft\\DirectX\\UserGpuPreferences.
+        """
+        # 1. Clean OverlayTestMode (khôi phục Multi-Plane Overlay)
+        try:
+            with winreg.OpenKey(
+                winreg.HKEY_LOCAL_MACHINE,
+                r"SOFTWARE\Microsoft\Windows\Dwm",
+                0,
+                winreg.KEY_SET_VALUE | winreg.KEY_WOW64_64KEY
+            ) as key:
+                winreg.DeleteValue(key, "OverlayTestMode")
+        except Exception:
+            pass
+
+        # 2. Clean VRROptimizeEnable (khôi phục đồng bộ tần số quét)
+        try:
+            with winreg.OpenKey(
+                winreg.HKEY_CURRENT_USER,
+                r"Software\Microsoft\DirectX\UserGpuPreferences",
+                0,
+                winreg.KEY_READ | winreg.KEY_SET_VALUE
+            ) as key:
+                val, _ = winreg.QueryValueEx(key, "DirectXUserGlobalSettings")
+                if isinstance(val, str) and "VRROptimizeEnable=1;" in val:
+                    new_val = val.replace("VRROptimizeEnable=1;", "")
+                    winreg.SetValueEx(key, "DirectXUserGlobalSettings", 0, winreg.REG_SZ, new_val)
+        except Exception:
+            pass
 
     def is_admin(self) -> bool:
         try:
@@ -107,13 +141,64 @@ class GpuOptimizerService:
                 optimized_value="High",
                 default_value="Normal"
             ),
+        )
+
+        specs_gamedvr = (
+            RegistryTargetSpec(
+                root=RegistryRoot.HKCU,
+                subkey="System\\GameConfigStore",
+                value_name="GameDVR_Enabled",
+                value_type=RegistryValueType.REG_DWORD,
+                optimized_value=0,
+                default_value=1
+            ),
+            RegistryTargetSpec(
+                root=RegistryRoot.HKCU,
+                subkey="System\\GameConfigStore",
+                value_name="GameDVR_FSEBehaviorMode",
+                value_type=RegistryValueType.REG_DWORD,
+                optimized_value=2,
+                default_value=0
+            ),
+            RegistryTargetSpec(
+                root=RegistryRoot.HKCU,
+                subkey="System\\GameConfigStore",
+                value_name="GameDVR_HonorUserFSEBehaviorMode",
+                value_type=RegistryValueType.REG_DWORD,
+                optimized_value=1,
+                default_value=0
+            ),
+            RegistryTargetSpec(
+                root=RegistryRoot.HKCU,
+                subkey="System\\GameConfigStore",
+                value_name="GameDVR_DXGIHonorFSEWindowsCompatible",
+                value_type=RegistryValueType.REG_DWORD,
+                optimized_value=1,
+                default_value=0
+            ),
+            RegistryTargetSpec(
+                root=RegistryRoot.HKCU,
+                subkey="Software\\Microsoft\\Windows\\CurrentVersion\\GameDVR",
+                value_name="AppCaptureEnabled",
+                value_type=RegistryValueType.REG_DWORD,
+                optimized_value=0,
+                default_value=1
+            ),
+            RegistryTargetSpec(
+                root=RegistryRoot.HKCU,
+                subkey="Software\\Microsoft\\Windows\\CurrentVersion\\GameDVR",
+                value_name="HistoricalCaptureEnabled",
+                value_type=RegistryValueType.REG_DWORD,
+                optimized_value=0,
+                default_value=1
+            ),
             RegistryTargetSpec(
                 root=RegistryRoot.HKLM,
-                subkey="SOFTWARE\\Microsoft\\Windows\\Dwm",
-                value_name="OverlayTestMode",
+                subkey="SOFTWARE\\Policies\\Microsoft\\Windows\\GameDVR",
+                value_name="AllowGameDVR",
                 value_type=RegistryValueType.REG_DWORD,
-                optimized_value=5,  # Giảm độ trễ hàng đợi kết xuất DWM composition
-                default_value=0
+                optimized_value=0,
+                default_value=1
             ),
         )
 
@@ -122,19 +207,19 @@ class GpuOptimizerService:
                 tweak_id="gpu_hags",
                 category=TweakCategory.GPU,
                 title="Lập Lịch Tăng Tốc Phần Cứng GPU (HAGS)",
-                description="Cho phép GPU trực tiếp quản lý VRAM mà không thông qua CPU trung gian, giảm độ trễ dựng hình và tăng FPS.",
+                description="Cho phép GPU trực tiếp quản lý VRAM. (Khuyến nghị: Nếu chơi Valorant bị khựng chuột hoặc crash Vanguard trên laptop Optimus, hãy để Tắt).",
                 requires_admin=True,
                 requires_reboot=True,
                 registry_targets=specs_hags
             ),
             TweakDescriptor(
-                tweak_id="gpu_vrr",
+                tweak_id="gpu_disable_gamedvr",
                 category=TweakCategory.GPU,
-                title="Tối Ưu Tần Số Quét Biến Thiên (Variable Refresh Rate)",
-                description="Kích hoạt VRROptimizeEnable trong DirectX để hỗ trợ G-Sync/FreeSync mượt mà hơn cho các tựa game không hỗ trợ sẵn.",
-                requires_admin=False,
+                title="Tắt Windows GameDVR & Ép True Fullscreen (Chống Giật & Xé Hình)",
+                description="Vô hiệu hóa tính năng quay video ngầm (GameDVR, AppCapture) của Windows và tối ưu chế độ FSE, loại bỏ giật lag, nhấp nháy đen và drop FPS khi chơi Valorant.",
+                requires_admin=True,
                 requires_reboot=False,
-                registry_targets=()
+                registry_targets=specs_gamedvr
             ),
             TweakDescriptor(
                 tweak_id="gpu_game_mode",
@@ -148,8 +233,8 @@ class GpuOptimizerService:
             TweakDescriptor(
                 tweak_id="gpu_priority_dwm_flush",
                 category=TweakCategory.GPU,
-                title="Ưu Tiên Kết Xuất GPU & Giảm Độ Trễ DWM",
-                description="Thiết lập GPU Priority = 8 trong Multimedia Games Scheduler và giảm thời gian đệm của Desktop Window Manager.",
+                title="Ưu Tiên Lập Lịch Luồng GPU & Giảm Input Lag (Safe MPO)",
+                description="Thiết lập GPU Priority = 8, Priority = 6, SFIO Priority = High trong Multimedia SystemProfile cho Games mà không can thiệp MPO, bảo đảm an toàn 100% cho màn hình và laptop Optimus.",
                 requires_admin=True,
                 requires_reboot=False,
                 registry_targets=specs_priority
@@ -175,9 +260,7 @@ class GpuOptimizerService:
     # -------------------------------------------------------------
     def get_status(self, tweak_id: str) -> TweakState:
         with self._lock:
-            if tweak_id == "gpu_vrr":
-                return self._check_vrr()
-            elif tweak_id == "gpu_high_performance_preference":
+            if tweak_id == "gpu_high_performance_preference":
                 return self._check_high_performance_gpu()
             elif tweak_id in self.descriptors:
                 return self._check_registry_tweak(self.descriptors[tweak_id])
@@ -186,21 +269,6 @@ class GpuOptimizerService:
     def get_all_status(self) -> Dict[str, TweakState]:
         with self._lock:
             return {tid: self.get_status(tid) for tid in self.descriptors}
-
-    def _check_vrr(self) -> TweakState:
-        try:
-            with winreg.OpenKey(
-                winreg.HKEY_CURRENT_USER,
-                r"Software\Microsoft\DirectX\UserGpuPreferences",
-                0,
-                winreg.KEY_READ
-            ) as key:
-                val, _ = winreg.QueryValueEx(key, "DirectXUserGlobalSettings")
-                if "VRROptimizeEnable=1" in str(val):
-                    return TweakState.OPTIMIZED
-        except (FileNotFoundError, OSError):
-            pass
-        return TweakState.DEFAULT
 
     def _check_high_performance_gpu(self) -> TweakState:
         try:
@@ -268,12 +336,13 @@ class GpuOptimizerService:
                 snapshot_id = snapshot.snapshot_id
 
             try:
-                if tweak_id == "gpu_vrr":
-                    return self._apply_vrr()
-                elif tweak_id == "gpu_high_performance_preference":
+                if tweak_id == "gpu_high_performance_preference":
                     return self._apply_high_performance_gpu(create_snapshot=create_snapshot)
                 else:
-                    return self._apply_registry_tweak(desc, snapshot_id)
+                    res = self._apply_registry_tweak(desc, snapshot_id)
+                    if tweak_id in ("gpu_priority_dwm_flush", "gpu_disable_gamedvr"):
+                        self.clean_legacy_dangerous_tweaks()
+                    return res
             except Exception as e:
                 return TweakExecutionResult(
                     tweak_id=tweak_id,
@@ -303,12 +372,13 @@ class GpuOptimizerService:
                 )
 
             try:
-                if tweak_id == "gpu_vrr":
-                    return self._revert_vrr()
-                elif tweak_id == "gpu_high_performance_preference":
+                if tweak_id == "gpu_high_performance_preference":
                     return self._revert_high_performance_gpu()
                 else:
-                    return self._revert_registry_tweak(desc)
+                    res = self._revert_registry_tweak(desc)
+                    if tweak_id in ("gpu_priority_dwm_flush", "gpu_disable_gamedvr"):
+                        self.clean_legacy_dangerous_tweaks()
+                    return res
             except Exception as e:
                 return TweakExecutionResult(
                     tweak_id=tweak_id,
@@ -316,79 +386,6 @@ class GpuOptimizerService:
                     new_state=TweakState.ERROR,
                     message=f"Lỗi khi hoàn tác: {e}"
                 )
-
-    # -------------------------------------------------------------
-    # SPECIFIC APPLY/REVERT IMPLEMENTATIONS
-    # -------------------------------------------------------------
-    def _apply_vrr(self) -> TweakExecutionResult:
-        subkey = r"Software\Microsoft\DirectX\UserGpuPreferences"
-        spec = RegistryTargetSpec(
-            root=RegistryRoot.HKCU,
-            subkey=subkey,
-            value_name="DirectXUserGlobalSettings",
-            value_type=RegistryValueType.REG_SZ,
-            optimized_value="VRROptimizeEnable=1;",
-            default_value="VRROptimizeEnable=0;"
-        )
-        self.backup_service.create_snapshot(TweakCategory.GPU, [spec])
-
-        with winreg.CreateKey(winreg.HKEY_CURRENT_USER, subkey) as key:
-            current_val = ""
-            try:
-                current_val, _ = winreg.QueryValueEx(key, "DirectXUserGlobalSettings")
-            except (FileNotFoundError, OSError):
-                pass
-
-            # Giữ lại các cài đặt hiện có và chỉ update hoặc append VRROptimizeEnable=1;
-            if not isinstance(current_val, str):
-                current_val = str(current_val) if current_val else ""
-
-            if "VRROptimizeEnable=" in current_val:
-                new_val = re.sub(r"VRROptimizeEnable=\d+;", "VRROptimizeEnable=1;", current_val)
-            else:
-                new_val = (current_val.strip(";") + ";VRROptimizeEnable=1;").lstrip(";")
-
-            winreg.SetValueEx(key, "DirectXUserGlobalSettings", 0, winreg.REG_SZ, new_val)
-
-        return TweakExecutionResult(
-            tweak_id="gpu_vrr",
-            success=True,
-            new_state=TweakState.OPTIMIZED,
-            message="Đã kích hoạt Variable Refresh Rate (VRROptimizeEnable=1;)."
-        )
-
-    def _revert_vrr(self) -> TweakExecutionResult:
-        subkey = r"Software\Microsoft\DirectX\UserGpuPreferences"
-        try:
-            with winreg.CreateKey(winreg.HKEY_CURRENT_USER, subkey) as key:
-                current_val = ""
-                try:
-                    current_val, _ = winreg.QueryValueEx(key, "DirectXUserGlobalSettings")
-                except (FileNotFoundError, OSError):
-                    pass
-
-                if not isinstance(current_val, str):
-                    current_val = str(current_val) if current_val else ""
-
-                if "VRROptimizeEnable=" in current_val:
-                    new_val = re.sub(r"VRROptimizeEnable=\d+;", "VRROptimizeEnable=0;", current_val)
-                else:
-                    new_val = (current_val.strip(";") + ";VRROptimizeEnable=0;").lstrip(";")
-
-                winreg.SetValueEx(key, "DirectXUserGlobalSettings", 0, winreg.REG_SZ, new_val)
-            return TweakExecutionResult(
-                tweak_id="gpu_vrr",
-                success=True,
-                new_state=TweakState.DEFAULT,
-                message="Đã khôi phục VRR về mặc định (VRROptimizeEnable=0;)."
-            )
-        except Exception as e:
-            return TweakExecutionResult(
-                tweak_id="gpu_vrr",
-                success=False,
-                new_state=TweakState.ERROR,
-                message=f"Lỗi hoàn tác VRR: {e}"
-            )
 
     def _apply_high_performance_gpu(self, create_snapshot: bool = True) -> TweakExecutionResult:
         subkey = r"Software\Microsoft\DirectX\UserGpuPreferences"

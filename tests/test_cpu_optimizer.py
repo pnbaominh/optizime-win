@@ -23,13 +23,14 @@ class TestCpuOptimizer(unittest.TestCase):
 
     def test_descriptors_integrity(self):
         descriptors = self.service.get_descriptors()
-        self.assertEqual(len(descriptors), 5)
+        self.assertEqual(len(descriptors), 6)
         ids = [d.tweak_id for d in descriptors]
         self.assertIn("cpu_ultimate_power_plan", ids)
         self.assertIn("cpu_win32_priority_separation", ids)
         self.assertIn("cpu_core_unparking", ids)
         self.assertIn("cpu_mmcss_responsiveness", ids)
         self.assertIn("cpu_disable_power_throttling", ids)
+        self.assertIn("cpu_global_timer_resolution", ids)
         for d in descriptors:
             self.assertEqual(d.category, TweakCategory.CPU)
 
@@ -154,14 +155,14 @@ class TestCpuOptimizer(unittest.TestCase):
         mock_cmd.return_value = MagicMock(returncode=0, stdout=f"Power Scheme GUID: {BALANCED_SCHEME_GUID}")
 
         results_apply = self.service.quick_apply_all()
-        self.assertEqual(len(results_apply), 5)
+        self.assertEqual(len(results_apply), 6)
         for res in results_apply.values():
             self.assertTrue(res.success)
 
         with patch("winreg.OpenKey") as mock_open:
             mock_open.return_value.__enter__.return_value = MagicMock()
             results_revert = self.service.revert_all()
-            self.assertEqual(len(results_revert), 5)
+            self.assertEqual(len(results_revert), 6)
             for res in results_revert.values():
                 self.assertTrue(res.success)
 

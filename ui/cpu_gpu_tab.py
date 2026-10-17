@@ -299,13 +299,13 @@ class CpuGpuOptimizationTab(ctk.CTkScrollableFrame):
 
         lbl = ctk.CTkLabel(
             sec_frame,
-            text="🚀 BỘ TỐI ƯU VI XỬ LÝ (CPU OPTIMIZER) - 5 TINH CHỈNH",
+            text=f"🚀 BỘ TỐI ƯU VI XỬ LÝ (CPU OPTIMIZER) - {len(self.cpu_service.get_descriptors())} TINH CHỈNH",
             font=ctk.CTkFont(family=FONT_FAMILY, size=12, weight="bold"),
             text_color="#38bdf8"
         )
         lbl.pack(anchor="w")
 
-        # 5 CPU Tweaks
+        # CPU Tweaks
         cpu_descs = self.cpu_service.get_descriptors()
         for d in cpu_descs:
             st = self.cpu_service.get_status(d.tweak_id)
@@ -325,7 +325,7 @@ class CpuGpuOptimizationTab(ctk.CTkScrollableFrame):
 
         lbl = ctk.CTkLabel(
             sec_frame,
-            text="🎮 BỘ TỐI ƯU ĐỒ HỌA (GPU OPTIMIZER) - 5 TINH CHỈNH",
+            text=f"🎮 BỘ TỐI ƯU ĐỒ HỌA (GPU OPTIMIZER) - {len(self.gpu_service.get_descriptors())} TINH CHỈNH (ESPORTS & SAFE MPO)",
             font=ctk.CTkFont(family=FONT_FAMILY, size=12, weight="bold"),
             text_color="#a855f7"
         )
