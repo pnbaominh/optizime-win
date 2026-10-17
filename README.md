@@ -26,7 +26,7 @@
 - **Hiệu Năng & Gaming (Performance):** Giảm `MenuShowDelay` về 20ms, tắt Xbox Game DVR background recording, tối ưu TCP Auto-Tuning Stack.
 - **Dọn Rác & Bloatware (Clean):** Dọn dẹp an toàn thư mục tạm `%TEMP%` và `Windows\Temp`, dọn dẹp Component Store WinSxS bằng DISM, gỡ bỏ an toàn các ứng dụng rác cài sẵn.
 
-### 4. ⚡ Siêu Tối Ưu Phần Cứng CPU, GPU & RAM (Mới Trong v1.2.0)
+### 4. ⚡ Siêu Tối Ưu Phần Cứng CPU, GPU & RAM (v1.2.1)
 - **🚀 5 Tinh Chỉnh Vi Xử Lý (CPU Optimizer):**
   - **Ultimate Performance Power Plan:** Kích hoạt và chuyển sang cấu hình nguồn Ultimate Performance, loại bỏ hoàn toàn độ trễ hạ xung CPU.
   - **Win32PrioritySeparation (Foreground Boost):** Thiết lập `0x26`, ưu tiên 100% chu kỳ xung nhịp CPU cho cửa sổ ứng dụng và game đang sử dụng.
@@ -103,7 +103,7 @@ optizime win/
 │   ├── memory_optimizer.py    # Thu gọn Working Sets & Standby List NT Native API
 │   ├── network_optimizer.py   # Xóa DNS cache & cấu hình Cloudflare/Google DNS
 │   ├── process_utils.py       # Chạy tiến trình ẩn 100%, ngăn chặn hiện tab CMD
-│   ├── version.py             # Định nghĩa phiên bản tập trung (v1.2.0)
+│   ├── version.py             # Định nghĩa phiên bản tập trung (v1.2.1)
 │   ├── updater.py             # Kiểm tra cập nhật GitHub Releases & tải installer
 │   ├── startup_manager.py     # Quản lý ứng dụng khởi động cùng Windows
 │   ├── safety.py              # System Restore Point & Registry Backup
