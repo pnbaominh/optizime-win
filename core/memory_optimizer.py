@@ -466,3 +466,30 @@ def set_large_system_cache_boot(prioritize_apps: bool) -> Tuple[bool, str]:
 def trim_memory_working_sets() -> Tuple[bool, str]:
     ok, msg, _, _ = trim_all_working_sets()
     return ok, msg
+
+# Cấu hình DisablePagingExecutive và SvcHostSplitThreshold
+def get_disable_paging_executive() -> bool:
+    try:
+        reg_path = r"SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management"
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, reg_path, 0, winreg.KEY_READ | winreg.KEY_WOW64_64KEY) as k:
+            val, _ = winreg.QueryValueEx(k, "DisablePagingExecutive")
+            return val == 1
+    except (FileNotFoundError, OSError):
+        return False
+
+def set_disable_paging_executive(enable: bool) -> Tuple[bool, str]:
+    from core.ram_optimizer import set_disable_paging_executive as _set_dpe
+    return _set_dpe(enable)
+
+def get_svchost_split_status() -> Tuple[bool, int, int]:
+    from core.ram_optimizer import get_svchost_split_status as _get_sss
+    return _get_sss()
+
+def apply_svchost_split_threshold(enable: bool) -> Tuple[bool, str]:
+    from core.ram_optimizer import apply_svchost_split_threshold as _apply_sst
+    return _apply_sst(enable)
+
+def get_auto_purge_worker():
+    from core.ram_optimizer import get_auto_purge_worker as _get_apw
+    return _get_apw()
+

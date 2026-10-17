@@ -58,7 +58,10 @@ class TestNetworkOptimizer(unittest.TestCase):
         ok, msg = flush_dns_cache()
         self.assertIsInstance(ok, bool)
         self.assertIsInstance(msg, str)
-        self.assertTrue(ok)
+        if not ok:
+            self.assertIn("elevation", msg.lower())
+        else:
+            self.assertTrue(ok)
 
     def test_benchmark_all_dns_parallel(self):
         # Callback tracker

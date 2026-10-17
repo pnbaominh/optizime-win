@@ -26,6 +26,25 @@
 - **Hiệu Năng & Gaming (Performance):** Giảm `MenuShowDelay` về 20ms, tắt Xbox Game DVR background recording, tối ưu TCP Auto-Tuning Stack.
 - **Dọn Rác & Bloatware (Clean):** Dọn dẹp an toàn thư mục tạm `%TEMP%` và `Windows\Temp`, dọn dẹp Component Store WinSxS bằng DISM, gỡ bỏ an toàn các ứng dụng rác cài sẵn.
 
+### 4. ⚡ Siêu Tối Ưu Phần Cứng CPU, GPU & RAM (Mới Trong v1.2.0)
+- **🚀 5 Tinh Chỉnh Vi Xử Lý (CPU Optimizer):**
+  - **Ultimate Performance Power Plan:** Kích hoạt và chuyển sang cấu hình nguồn Ultimate Performance, loại bỏ hoàn toàn độ trễ hạ xung CPU.
+  - **Win32PrioritySeparation (Foreground Boost):** Thiết lập `0x26`, ưu tiên 100% chu kỳ xung nhịp CPU cho cửa sổ ứng dụng và game đang sử dụng.
+  - **CPU Core Unparking (100%):** Mở khóa toàn bộ nhân CPU (`CPMINCORES = 100`), giữ mọi nhân luôn sẵn sàng không bị ngủ ngắt quãng.
+  - **MMCSS System Responsiveness:** Tối ưu hóa phân bổ 90% tài nguyên CPU cho các tác vụ đa phương tiện và gaming thời gian thực.
+  - **Tắt Điều Tiết Xung Nhịp (Disable Power Throttling):** Ngăn Windows tự ý bóp nghẹt xung nhịp khi đang chạy nặng.
+- **🎮 5 Tinh Chỉnh Đồ Họa (GPU Optimizer):**
+  - **Lập Lịch Tăng Tốc Phần Cứng GPU (HAGS):** Kích hoạt `HwSchMode = 2` cho phép GPU trực tiếp quản lý VRAM, giảm giật khung hình và tăng FPS.
+  - **Variable Refresh Rate (VRR):** Tối ưu hóa tần số quét biến thiên trong DirectX cho màn hình G-Sync / FreeSync.
+  - **Chế Độ Windows Game Mode Chuyên Sâu:** Kích hoạt GameBar Registry giúp ưu tiên luồng render đồ họa.
+  - **GPU Priority & Giảm Độ Trễ DWM:** Thiết lập GPU Priority = 8 và giảm độ trễ hàng đợi kết xuất DWM composition (`OverlayTestMode = 5`).
+  - **Ưu Tiên Card Đồ Họa Rời Hiệu Năng Cao:** Cấu hình hệ thống DirectX luôn chỉ định GPU rời (Discrete GPU) xử lý các ứng dụng đồ họa nặng (`DefaultGpuPreference = 2`).
+- **💾 Nâng Cấp Quản Trị Bộ Nhớ RAM Chuyên Sâu:**
+  - **DisablePagingExecutive:** Khóa phần nhân Kernel và Drivers trong RAM vật lý, ngăn Windows tráo đổi kernel xuống swap file.
+  - **SvcHostSplitThresholdInKB:** Tự động tính toán theo dung lượng RAM vật lý thực tế để gom/tách tiến trình svchost tối ưu.
+  - **Auto Standby Purge Worker:** Luồng nền daemon tự động dọn dẹp Standby List và Working Sets khi RAM vượt ngưỡng 80% (kèm cooldown 120 giây).
+- **🛡️ Nguyên Tắc Zero-Disk Audit:** 100% tính năng mới chỉ can thiệp CPU, GPU, RAM — tuyệt đối không can thiệp ổ đĩa lưu trữ.
+
 ---
 
 ## 📥 Tải Về & Cài Đặt (Releases)
@@ -48,7 +67,12 @@ python -m pip install -r requirements.txt
 python main.py
 ```
 
-### 2. Đóng gói bộ cài đặt Setup:
+### 2. Kiểm thử tự động (Unit & Integration Tests):
+```powershell
+python -m pytest tests -v
+```
+
+### 3. Đóng gói bộ cài đặt Setup:
 ```powershell
 # Đóng gói file standalone exe
 python build_exe.py
@@ -57,7 +81,7 @@ python build_exe.py
 python build_installer.py
 ```
 
-### 3. Tạo bản Release mới lên GitHub:
+### 4. Tạo bản Release mới lên GitHub:
 ```powershell
 python release.py
 ```
@@ -71,14 +95,19 @@ python release.py
 ```
 optizime win/
 ├── core/
+│   ├── contracts.py           # Strict Data Contracts, Enums & Runtime Validators
+│   ├── registry_backup.py     # Dịch vụ sao lưu & phục hồi Registry nguyên tử (JSON Snapshots)
+│   ├── cpu_optimizer.py       # Bộ 5 tinh chỉnh vi xử lý CPU chuyên sâu
+│   ├── gpu_optimizer.py       # Bộ 5 tinh chỉnh đồ họa GPU chuyên sâu
+│   ├── ram_optimizer.py       # DisablePagingExecutive, SvcHostSplit, AutoStandbyPurgeWorker
+│   ├── memory_optimizer.py    # Thu gọn Working Sets & Standby List NT Native API
+│   ├── network_optimizer.py   # Xóa DNS cache & cấu hình Cloudflare/Google DNS
 │   ├── process_utils.py       # Chạy tiến trình ẩn 100%, ngăn chặn hiện tab CMD
-│   ├── version.py             # Định nghĩa phiên bản tập trung và logic so sánh
+│   ├── version.py             # Định nghĩa phiên bản tập trung (v1.2.0)
 │   ├── updater.py             # Kiểm tra cập nhật GitHub Releases & tải installer
 │   ├── startup_manager.py     # Quản lý ứng dụng khởi động cùng Windows
-│   ├── network_optimizer.py   # Xóa DNS cache & cấu hình Cloudflare/Google DNS
-│   ├── memory_optimizer.py    # Thu gọn bộ nhớ RAM an toàn
 │   ├── safety.py              # System Restore Point & Registry Backup
-│   ├── sys_info.py            # Nhận diện Windows 10/11, kiểm tra quyền Admin & ổ đĩa
+│   ├── sys_info.py            # Nhận diện Windows 10/11, kiểm tra quyền Admin
 │   ├── tweak_base.py          # Abstract Base Class cho Tweak
 │   ├── privacy.py             # Tinh chỉnh Telemetry & Quyền riêng tư
 │   ├── services.py            # Quản lý Dịch vụ & Scheduled Tasks an toàn
@@ -88,10 +117,18 @@ optizime win/
 ├── ui/
 │   ├── theme.py               # Màu sắc Dark Mode Fluent Design
 │   ├── components.py          # TweakCard, StatBox
+│   ├── cpu_gpu_tab.py         # Giao diện Tab "⚡ Tối Ưu CPU & GPU" chuẩn Atomic Design
 │   ├── update_dialog.py       # Pop-up thông báo bản cập nhật mới & tải %
-│   └── main_window.py         # Giao diện chính 9 tab & Auto-update
+│   └── main_window.py         # Giao diện chính 11 tab & Auto-update
 ├── tests/
-│   └── test_core.py           # Unit tests kiểm tra tự động
+│   ├── test_contracts_and_backup.py      # Unit tests cho contracts & backup service
+│   ├── test_cpu_optimizer.py             # Unit tests cho 5 tinh chỉnh CPU
+│   ├── test_gpu_optimizer.py             # Unit tests cho 5 tinh chỉnh GPU
+│   ├── test_ram_optimizer_upgrade.py     # Unit tests cho nâng cấp RAM & daemon worker
+│   ├── test_integration_workflow.py     # Integration tests & Zero-Disk Constraint audit
+│   ├── test_core.py                      # Unit tests các tinh chỉnh cốt lõi
+│   ├── test_memory_optimizer.py          # Unit tests memory purge NT API
+│   └── test_network_optimizer.py         # Unit tests DNS & Network
 ├── build_exe.py               # Đóng gói PyInstaller ra file .exe độc lập
 ├── build_installer.py         # Đóng gói Inno Setup tạo file cài đặt chuẩn OBS
 ├── release.py                 # Tool release có xác nhận [y/N] và tự động tag GitHub

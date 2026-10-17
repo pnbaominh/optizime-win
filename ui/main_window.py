@@ -56,6 +56,16 @@ from core.memory_optimizer import (
     set_large_system_cache_boot,
     trim_memory_working_sets
 )
+from core.registry_backup import RegistryBackupService
+from core.cpu_optimizer import CpuOptimizerService
+from core.gpu_optimizer import GpuOptimizerService
+from core.ram_optimizer import (
+    get_disable_paging_executive,
+    set_disable_paging_executive,
+    get_svchost_split_status,
+    apply_svchost_split_threshold,
+    get_auto_purge_worker,
+)
 from ui.theme import (
     COLOR_BG_DARK, COLOR_SIDEBAR_BG, COLOR_CARD_BG, COLOR_BORDER,
     COLOR_PRIMARY, COLOR_PRIMARY_HOVER, COLOR_SUCCESS, COLOR_SUCCESS_HOVER,
@@ -63,6 +73,7 @@ from ui.theme import (
     COLOR_TEXT_WHITE, COLOR_TEXT_MUTED, COLOR_TEXT_DIM, FONT_FAMILY
 )
 from ui.components import TweakCard, StatBox
+from ui.cpu_gpu_tab import CpuGpuOptimizationTab
 
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
@@ -71,16 +82,22 @@ class MainWindow(ctk.CTk):
     def __init__(self):
         super().__init__()
 
-        # Khởi tạo engine
+        # Khởi tạo engine & dịch vụ phần cứng
         self.engine = OptimizerEngine()
         self.sys_info = get_windows_version_info()
         self.card_widgets = []
+
+        self.registry_backup = RegistryBackupService()
+        self.cpu_service = CpuOptimizerService(self.registry_backup)
+        self.gpu_service = GpuOptimizerService(self.registry_backup)
+        self.auto_purge_worker = get_auto_purge_worker()
 
         # Cấu hình cửa sổ
         self.title(f"{APP_NAME} v{APP_VERSION} - Tối Ưu Hóa Windows Chuyên Sâu")
         self.geometry("1060x690")
         self.minsize(940, 600)
         self.configure(fg_color=COLOR_BG_DARK)
+        self.protocol("WM_DELETE_WINDOW", self._on_close_window)
 
         # Cấu hình Icon cho cửa sổ (Window Icon)
         self.base_dir = getattr(sys, '_MEIPASS', os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -232,6 +249,7 @@ class MainWindow(ctk.CTk):
             ("safety", "🛡️  An Toàn & Khôi Phục"),
             ("privacy", "🔒  Quyền Riêng Tư"),
             ("services", "⚙️  Dịch Vụ Hệ Thống"),
+            ("hardware", "⚡  Tối Ưu CPU & GPU"),
             ("performance", "🚀  Hiệu Năng & Game"),
             ("memory", "💾  Tối Ưu Hóa RAM"),
             ("startup", "⚡  Quản Lý Khởi Động"),
@@ -334,6 +352,7 @@ class MainWindow(ctk.CTk):
         self.views["safety"] = self._create_safety_view()
         self.views["privacy"] = self._create_category_view("Quyền Riêng Tư")
         self.views["services"] = self._create_category_view("Dịch Vụ Hệ Thống")
+        self.views["hardware"] = CpuGpuOptimizationTab(self.main_container, self.cpu_service, self.gpu_service, self.registry_backup, logger=self.log)
         self.views["performance"] = self._create_category_view("Hiệu Năng & Gaming")
         self.views["memory"] = self._create_memory_view()
         self.views["startup"] = self._create_startup_view()
@@ -359,6 +378,8 @@ class MainWindow(ctk.CTk):
 
         if tab_id == "dashboard":
             self._update_dashboard_kpis()
+        elif tab_id == "hardware":
+            self.views["hardware"].refresh_all_states()
         elif tab_id == "memory":
             self._refresh_memory_view()
         elif tab_id == "network":
@@ -1267,6 +1288,26 @@ class MainWindow(ctk.CTk):
         )
         self.sw_large_cache.pack(anchor="w", padx=16, pady=6)
 
+        # Switch 4: DisablePagingExecutive
+        self.sw_disable_paging_exec = ctk.CTkSwitch(
+            boot_card,
+            text="Khóa Mã Nhân Kernel & Drivers Trong RAM Vật Lý (DisablePagingExecutive = 1)\n(Giữ toàn bộ nhân hệ điều hành trong RAM thay vì swap, giảm giật lag khung hình)",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=11, weight="bold"),
+            text_color=COLOR_TEXT_WHITE,
+            progress_color=COLOR_PRIMARY
+        )
+        self.sw_disable_paging_exec.pack(anchor="w", padx=16, pady=6)
+
+        # Switch 5: SvcHostSplitThreshold
+        self.sw_svchost_split = ctk.CTkSwitch(
+            boot_card,
+            text="Tối Ưu Ngưỡng Phân Tách Dịch Vụ SvcHost Theo RAM Thực Tế (SvcHostSplitThresholdInKB)\n(Tự động điều chỉnh ngưỡng phân tách svchost tương thích tuyệt đối với tổng dung lượng RAM)",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=11, weight="bold"),
+            text_color=COLOR_TEXT_WHITE,
+            progress_color=COLOR_PRIMARY
+        )
+        self.sw_svchost_split.pack(anchor="w", padx=16, pady=6)
+
         # Boot Action Bar
         boot_action_row = ctk.CTkFrame(boot_card, fg_color="transparent")
         boot_action_row.pack(fill="x", padx=16, pady=(12, 14))
@@ -1290,6 +1331,47 @@ class MainWindow(ctk.CTk):
             text_color=COLOR_TEXT_MUTED
         )
         self.lbl_boot_mem_result.pack(side="left", padx=12)
+
+        # Card 4: Tự Động Dọn Standby RAM Thông Minh (Auto Standby Purge Worker)
+        purge_card = ctk.CTkFrame(frame, fg_color=COLOR_CARD_BG, border_color=COLOR_BORDER, border_width=1, corner_radius=8)
+        purge_card.pack(fill="x", pady=(0, 14))
+
+        lbl_ap_t = ctk.CTkLabel(
+            purge_card,
+            text="⏱️ Luồng Nền Tự Động Dọn Standby List Khi RAM > 80% (Auto Standby Purge Worker)",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=13, weight="bold"),
+            text_color=COLOR_TEXT_WHITE
+        )
+        lbl_ap_t.pack(anchor="w", padx=16, pady=(12, 4))
+
+        lbl_ap_sub = ctk.CTkLabel(
+            purge_card,
+            text="Bộ định thời chạy ngầm tự động giải phóng Standby Cache hệ thống khi mức dùng RAM vượt ngưỡng 80%, tích hợp Cooldown 120 giây chống nghẽn.",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=11),
+            text_color=COLOR_TEXT_MUTED
+        )
+        lbl_ap_sub.pack(anchor="w", padx=16, pady=(0, 10))
+
+        ap_action_row = ctk.CTkFrame(purge_card, fg_color="transparent")
+        ap_action_row.pack(fill="x", padx=16, pady=(0, 14))
+
+        self.sw_auto_purge = ctk.CTkSwitch(
+            ap_action_row,
+            text="Kích Hoạt Luồng Nền Tự Động Dọn Dẹp Standby RAM (> 80%)",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=12, weight="bold"),
+            text_color=COLOR_TEXT_WHITE,
+            progress_color=COLOR_SUCCESS,
+            command=self._handle_toggle_auto_purge
+        )
+        self.sw_auto_purge.pack(side="left")
+
+        self.lbl_auto_purge_status = ctk.CTkLabel(
+            ap_action_row,
+            text="Trạng thái: Đang tắt",
+            font=ctk.CTkFont(family=FONT_FAMILY, size=11),
+            text_color=COLOR_TEXT_MUTED
+        )
+        self.lbl_auto_purge_status.pack(side="left", padx=16)
 
         self._refresh_memory_view()
         return frame
@@ -1343,6 +1425,27 @@ class MainWindow(ctk.CTk):
                 else:
                     self.sw_large_cache.deselect()
 
+                if get_disable_paging_executive():
+                    self.sw_disable_paging_exec.select()
+                else:
+                    self.sw_disable_paging_exec.deselect()
+
+                is_split_opt, curr_split_kb, total_ram_kb = get_svchost_split_status()
+                if is_split_opt:
+                    self.sw_svchost_split.select()
+                else:
+                    self.sw_svchost_split.deselect()
+
+                # Update Auto Standby Purge
+                worker_running = self.auto_purge_worker.is_running()
+                if worker_running:
+                    self.sw_auto_purge.select()
+                    status_text = f"Trạng thái: Đang hoạt động • Đã dọn {self.auto_purge_worker.purge_count} lần (+{self.auto_purge_worker.total_freed_mb} MB)"
+                    self.lbl_auto_purge_status.configure(text=status_text, text_color=COLOR_SUCCESS)
+                else:
+                    self.sw_auto_purge.deselect()
+                    self.lbl_auto_purge_status.configure(text="Trạng thái: Đang tắt", text_color=COLOR_TEXT_MUTED)
+
             self.after(0, update_ui)
 
         threading.Thread(target=worker, daemon=True).start()
@@ -1394,6 +1497,8 @@ class MainWindow(ctk.CTk):
         disable_sysmain = bool(self.sw_sysmain.get())
         disable_mem_comp = bool(self.sw_mem_comp.get())
         prioritize_apps = bool(self.sw_large_cache.get())
+        disable_paging = bool(self.sw_disable_paging_exec.get())
+        split_svchost = bool(self.sw_svchost_split.get())
 
         def worker():
             logs = []
@@ -1414,6 +1519,16 @@ class MainWindow(ctk.CTk):
             self.log(f"[{'+' if ok3 else '!'}] LargeSystemCache: {msg3}")
             logs.append(msg3)
 
+            # 4. DisablePagingExecutive
+            ok4, msg4 = set_disable_paging_executive(disable_paging)
+            self.log(f"[{'+' if ok4 else '!'}] DisablePagingExecutive: {msg4}")
+            logs.append(msg4)
+
+            # 5. SvcHostSplitThreshold
+            ok5, msg5 = apply_svchost_split_threshold(split_svchost)
+            self.log(f"[{'+' if ok5 else '!'}] SvcHostSplitThreshold: {msg5}")
+            logs.append(msg5)
+
             self.log("--- HOÀN TẤT CẤU HÌNH RAM BOOT ---")
 
             def on_done():
@@ -1423,7 +1538,9 @@ class MainWindow(ctk.CTk):
                     "Đã lưu các cấu hình tối ưu hóa RAM khi khởi động thành công!\n\n"
                     "Dự kiến sau khi bạn Khởi động lại máy (Restart):\n"
                     "• Windows sẽ không tự nạp trước hàng gigabyte tệp vào RAM.\n"
-                    "• Tiến trình System sẽ giảm đáng kể dung lượng chiếm dụng.\n\n"
+                    "• Tiến trình System sẽ giảm đáng kể dung lượng chiếm dụng.\n"
+                    "• Kernel và Drivers được giữ cố định trong bộ nhớ RAM vật lý.\n"
+                    "• Tiến trình SvcHost được gom/tách tối ưu theo dung lượng RAM.\n\n"
                     "Bạn có thể khởi động lại máy tính khi thuận tiện để trải nghiệm lượng RAM được giải phóng."
                 )
                 messagebox.showinfo("Cấu Hình Boot Đã Lưu", msg_body)
@@ -1432,6 +1549,28 @@ class MainWindow(ctk.CTk):
             self.after(0, on_done)
 
         threading.Thread(target=worker, daemon=True).start()
+
+    def _handle_toggle_auto_purge(self):
+        enable = bool(self.sw_auto_purge.get())
+        if enable:
+            started = self.auto_purge_worker.start()
+            if started:
+                self.log("[RAM] Đã kích hoạt Luồng nền Tự động dọn dẹp Standby RAM khi > 80%.")
+                self.lbl_auto_purge_status.configure(text="Trạng thái: Đang hoạt động (Kiểm tra mỗi 20s)", text_color=COLOR_SUCCESS)
+            else:
+                self.lbl_auto_purge_status.configure(text="Trạng thái: Đang chạy", text_color=COLOR_SUCCESS)
+        else:
+            self.auto_purge_worker.stop()
+            self.log("[RAM] Đã tắt Luồng nền Tự động dọn dẹp Standby RAM.")
+            self.lbl_auto_purge_status.configure(text="Trạng thái: Đang tắt", text_color=COLOR_TEXT_MUTED)
+
+    def _on_close_window(self):
+        try:
+            if hasattr(self, "auto_purge_worker"):
+                self.auto_purge_worker.stop()
+        except Exception:
+            pass
+        self.destroy()
 
     # -------------------------------------------------------------
     # VIEW: LOGS
